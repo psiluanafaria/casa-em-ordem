@@ -1,0 +1,3163 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Casa em Ordem</title>
+<!--
+  Casa em Ordem — versão local.
+  Este arquivo contém SÓ o código. Os dados ficam num arquivo separado
+  (ex.: Sistema Casa Claude\CasaDados\casa-dados.json), escolhido na primeira vez
+  que a página é aberta. Nunca são enviados a nenhum servidor pela página.
+-->
+</head><body>
+<style>
+  /* Layout: abas no topo, conteúdo em cartões e listas agrupadas por categoria ou cômodo.
+     Paleta: verde-musgo (ação), âmbar (rótulos e prioridade média), terracota (alerta). */
+  :root {
+    --bg: #f6f5ef;
+    --surface: #ffffff;
+    --surface-2: #f0efe6;
+    --border: #e3e0d3;
+    --text: #292a22;
+    --text-muted: #74755f;
+    --accent: #3f6b4f;
+    --accent-hover: #345a41;
+    --accent-soft: #e7efe8;
+    --accent-2: #a8672a;
+    --accent-2-soft: #f5e8d8;
+    --danger: #b3492f;
+    --danger-soft: #f7e4de;
+    --focus: #3f6b4f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1b1d17;
+      --surface: #24261e;
+      --surface-2: #2c2e24;
+      --border: #3c3e32;
+      --text: #ede9dd;
+      --text-muted: #a5a691;
+      --accent: #74b78b;
+      --accent-hover: #86c69c;
+      --accent-soft: #2b3a2f;
+      --accent-2: #dc9a58;
+      --accent-2-soft: #3a2f20;
+      --danger: #e58567;
+      --danger-soft: #43271f;
+      --focus: #74b78b;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1b1d17;
+    --surface: #24261e;
+    --surface-2: #2c2e24;
+    --border: #3c3e32;
+    --text: #ede9dd;
+    --text-muted: #a5a691;
+    --accent: #74b78b;
+    --accent-hover: #86c69c;
+    --accent-soft: #2b3a2f;
+    --accent-2: #dc9a58;
+    --accent-2-soft: #3a2f20;
+    --danger: #e58567;
+    --danger-soft: #43271f;
+    --focus: #74b78b;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Work Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  #app-root {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding-block: 20px 72px;
+    padding-inline: 20px;
+  }
+  a { color: var(--accent); }
+  /* Tab navigation */
+  #tabs-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  #tabs-nav {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font: inherit;
+    font-weight: 600;
+    padding: 12px 10px;
+    margin-bottom: -1px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 4px 4px 0 0;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .tab-btn.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+  }
+  .tab-btn.soon { color: var(--text-muted); opacity: 0.7; }
+  .soon-badge {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    background: var(--accent-2-soft);
+    padding: 2px 6px;
+    border-radius: 999px;
+  }
+  #save-status {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 0;
+  }
+  #save-status .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+  }
+  #save-status.saved .dot { background: var(--accent); }
+  #save-status.saving .dot { background: var(--accent-2); }
+  #save-status.error .dot { background: var(--danger); }
+  #content { margin-top: 4px; }
+  .section-hint {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin: 14px 0 0;
+  }
+  .empty-state {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-top: 18px;
+    padding: 24px;
+    text-align: center;
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+  }
+  /* Buttons & inputs shared */
+  input[type="text"], select, textarea {
+    font: inherit;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 11px;
+  }
+  input[type="text"]:focus, select:focus, textarea:focus {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    font: inherit;
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .btn-text {
+    background: none;
+    border: none;
+    font: inherit;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--accent-2);
+    cursor: pointer;
+    padding: 4px 2px;
+  }
+  .btn-text:hover { text-decoration: underline; }
+  .btn-text:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .btn-text.danger { color: var(--danger); }
+  /* Cardapio */
+  .week-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .day-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .day-card > h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+  }
+  .meal-row { display: flex; flex-direction: column; gap: 4px; }
+  .meal-row label { font-size: 12px; color: var(--text-muted); }
+  .meal-input-row { display: flex; gap: 6px; align-items: center; }
+  .meal-input-row input[type="text"] { flex: 1; min-width: 0; }
+  .btn-add-compra {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 9px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-add-compra:hover { background: var(--accent-soft); }
+  .btn-add-compra:disabled { opacity: 0.6; cursor: default; }
+  /* Alternador Mercado | Casa */
+  .seg-toggle {
+    display: inline-flex;
+    gap: 2px;
+    margin-top: 16px;
+    padding: 3px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .seg-btn {
+    background: none;
+    border: none;
+    font: inherit;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-muted);
+    padding: 7px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .seg-btn:hover { color: var(--text); }
+  .seg-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .seg-btn.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+  /* Listas (Compras, Casa, Tarefas) */
+  .compras-form {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .compras-form input[type="text"] { flex: 1; min-width: 180px; }
+  .compras-form input.input-preco { flex: 0 0 120px; min-width: 100px; width: 120px; }
+  .compras-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 18px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .categoria-group { margin-top: 18px; }
+  .categoria-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 8px;
+  }
+  .item-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+  }
+  .item-row input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--accent);
+    flex-shrink: 0;
+  }
+  .item-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .item-row.done .item-text {
+    text-decoration: line-through;
+    color: var(--text-muted);
+  }
+  .item-row.done .badge, .item-row.done .item-preco { opacity: 0.55; }
+  .item-preco {
+    font-size: 13px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .item-remove {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 4px;
+  }
+  .item-remove:hover { color: var(--danger); }
+  .item-remove:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  /* Prioridade */
+  .badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .badge.prio-alta { color: var(--danger); background: var(--danger-soft); }
+  .badge.prio-media { color: var(--accent-2); background: var(--accent-2-soft); }
+  .badge.prio-baixa { color: var(--accent); background: var(--accent-soft); }
+  /* Totais da lista Casa */
+  .totais {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+  }
+  .total-tile {
+    flex: 1;
+    min-width: 160px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .total-label { font-size: 12px; color: var(--text-muted); }
+  .total-valor {
+    font-size: 20px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .total-tile.destaque .total-valor { color: var(--accent); }
+  .total-sub { font-size: 12px; color: var(--text-muted); }
+  /* Painéis de formulário */
+  .receitas-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .receita-form, .form-panel {
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .field-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-top: 12px;
+  }
+  .receita-form > .field-label:first-child,
+  .form-panel > .field-label:first-child { margin-top: 0; }
+  .form-selects {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin-top: 4px;
+  }
+  .form-selects > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .form-selects .field-label { margin-top: 8px; }
+  .form-selects select { width: 100%; }
+  .ingredientes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .ingrediente-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 7px 10px;
+  }
+  .ingrediente-text { flex: 1; font-size: 14px; }
+  .modo-preparo {
+    min-height: 130px;
+    resize: vertical;
+    margin-top: 6px;
+  }
+  .obs-input { min-height: 80px; resize: vertical; margin-top: 6px; }
+  .form-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 14px;
+  }
+  /* Receitas */
+  .receitas-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .receita-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .receita-card h3 { margin: 0; font-size: 16px; cursor: pointer; }
+  .receita-card h3:hover { color: var(--accent); }
+  .receita-meta { font-size: 12px; color: var(--text-muted); }
+  .receita-preview {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 4px 0 0;
+    white-space: pre-line;
+  }
+  .receita-actions, .card-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: auto;
+    padding-top: 10px;
+  }
+  .receita-view {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 640px;
+  }
+  .receita-view-back {
+    align-self: flex-start;
+    margin-bottom: 6px;
+  }
+  .receita-view-title { margin: 0; font-size: 21px; }
+  .receita-view-ingredientes {
+    margin: 6px 0 0;
+    padding-left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 14px;
+  }
+  .receita-view-modo {
+    margin: 4px 0 0;
+    white-space: pre-line;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  /* Reparos */
+  .reparos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .reparo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .reparo-titulo { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+  .reparo-card.feito .reparo-titulo { text-decoration: line-through; color: var(--text-muted); }
+  .reparo-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .dica-texto {
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-line;
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
+  }
+  .dica-fonte { font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+  .dica-fonte a { color: var(--accent); }
+  .dicas-busca { width: 100%; margin-top: 14px; }
+  a.receita-video { display: inline-block; text-decoration: none; margin-top: 10px; }
+  .import-panel { margin-top: 14px; }
+  .ex-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .ex-item { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface); }
+  .ex-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+  .ex-num { font-weight: 700; color: var(--accent); }
+  .ex-nome { font-weight: 600; overflow-wrap: anywhere; }
+  .ex-dose { font-size: 13px; color: var(--text-muted); }
+  .ex-como { font-size: 13px; margin: 6px 0 0; white-space: pre-line; overflow-wrap: anywhere; }
+  .ex-form-row { border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-top: 8px; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+  .ex-form-row .ex-form-nome, .ex-form-row textarea, .ex-form-row .ex-form-link { grid-column: 1 / -1; }
+  .ex-form-row textarea { min-height: 50px; resize: vertical; }
+  .ex-form-row .item-remove { justify-self: end; grid-column: 1 / -1; }
+  .ficha-aviso { font-size: 12px; color: var(--text-muted); margin: 10px 0 0; }
+  .treino-painel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .treino-painel h3 { margin: 0; font-size: 15px; }
+  .treino-perfil { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; }
+  .treino-perfil label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-muted); }
+  .treino-perfil input { width: 150px; }
+  .meta-barra { height: 10px; border-radius: 6px; background: var(--accent-soft); overflow: hidden; }
+  .meta-barra span { display: block; height: 100%; background: var(--accent); border-radius: 6px; }
+  .treino-resumo { font-size: 14px; }
+  .plano-semana { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+  .plano-semana b { display: inline-block; min-width: 70px; }
+  .plano-semana button { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-align: left; }
+  .dias-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .online-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; font-size: 12px; color: var(--text-muted); margin-bottom: 12px; overflow-wrap: anywhere; }
+  .setup-panel .login-email { flex: 1 1 220px; min-width: 0; }
+  .import-msg { margin-top: 12px; }
+  .header-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .import-panel ul { margin: 8px 0 0; padding-left: 20px; font-size: 13px; max-height: 220px; overflow: auto; }
+  .import-panel .import-dup { color: var(--text-muted); }
+  .reparo-obs {
+    font-size: 13px;
+    color: var(--text-muted);
+    white-space: pre-line;
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
+  }
+  .card-actions select { padding: 6px 8px; font-size: 13px; }
+  /* Tarefas: filtro por cômodo */
+  .room-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .chip {
+    font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    background: var(--surface); color: var(--text-muted); border: 1px solid var(--border);
+    border-radius: 999px; padding: 6px 12px;
+  }
+  .chip:hover { color: var(--text); }
+  .chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip .chip-count { font-weight: 500; opacity: 0.8; margin-left: 4px; }
+  .room-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .room-head .categoria-title { margin-bottom: 0; }
+  .room-actions { display: flex; gap: 14px; }
+  .room-empty { color: var(--text-muted); font-size: 13px; margin: 0; padding: 4px 2px; }
+  .freq-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--text-muted); background: var(--surface-2); padding: 3px 8px;
+    border-radius: 999px; white-space: nowrap; flex-shrink: 0;
+  }
+  .item-row.done .freq-badge { opacity: 0.55; }
+  .coming-soon .empty-state { margin-top: 14px; }
+  /* Backup */
+  .tab-btn .alert-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-2); }
+  .backup-wrap { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; max-width: 720px; }
+  .backup-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .backup-card h3 { margin: 0; font-size: 16px; }
+  .backup-card p { margin: 0; font-size: 14px; color: var(--text-muted); }
+  .backup-last { font-size: 14px; }
+  .backup-last strong { font-variant-numeric: tabular-nums; }
+  .backup-last.atrasado strong { color: var(--accent-2); }
+  .backup-resumo { display: flex; flex-wrap: wrap; gap: 6px; }
+  .backup-resumo span {
+    font-size: 12px; font-weight: 600; color: var(--text-muted); background: var(--surface-2);
+    padding: 3px 9px; border-radius: 999px; font-variant-numeric: tabular-nums;
+  }
+  .backup-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .btn-secondary {
+    background: var(--surface); color: var(--accent); border: 1px solid var(--accent);
+    font: inherit; font-weight: 600; padding: 9px 16px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+  }
+  .btn-secondary:hover { background: var(--accent-soft); }
+  .btn-secondary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .btn-danger {
+    background: var(--danger); color: #fff; border: none; font: inherit; font-weight: 600;
+    padding: 10px 18px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+  }
+  .btn-danger:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .backup-msg { font-size: 13px; margin: 0; }
+  .backup-msg.ok { color: var(--accent); }
+  .backup-msg.erro { color: var(--danger); }
+  .backup-msg.aviso { color: var(--accent-2); }
+  .restore-preview {
+    border: 1px solid var(--danger); background: var(--danger-soft); border-radius: 10px;
+    padding: 14px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .restore-preview p { color: var(--text); }
+  /* Arquivo de dados */
+  .setup-panel {
+    background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 12px;
+    padding: 18px; margin-top: 16px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .setup-panel h3 { margin: 0; font-size: 16px; }
+  .setup-panel p { margin: 0; font-size: 14px; }
+  .setup-panel code { font-size: 13px; background: var(--surface); padding: 1px 6px; border-radius: 4px; }
+  .setup-panel ol { margin: 0; padding-left: 20px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+  #save-status.local .dot { background: var(--accent-2); }
+  @media (max-width: 520px) {
+    #app-root { padding-block: 14px 60px; padding-inline: 16px; }
+    .tab-btn { padding: 10px 8px; font-size: 14px; }
+    .compras-form input.input-preco { flex: 1 1 100px; width: auto; }
+  }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&amp;display=swap">
+<div id="app-root">
+  <div id="tabs-bar">
+    <nav id="tabs-nav" aria-label="Seções"></nav>
+    <div id="save-status"><span class="dot"></span><span id="save-status-text">Salvo</span></div>
+  </div>
+  <main id="content"></main>
+</div>
+<script id="app-state" type="application/json">{}</script>
+<script>
+(function () {
+  "use strict";
+  // Cópia de segurança no próprio navegador (fica só neste computador).
+  var LS_KEY = "casa-em-ordem-local-v1";
+  var IDB_NAME = "casa-em-ordem";
+  var IDB_STORE = "handles";
+  var FS_OK = typeof window.showSaveFilePicker === "function" && typeof window.showOpenFilePicker === "function";
+  var ONLINE = /^https?:$/.test(location.protocol);
+  var JSON_TYPES = [{ description: "Dados do Casa em Ordem", accept: { "application/json": [".json"] } }];
+  var DAYS = [
+    { key: "seg", label: "Segunda-feira" },
+    { key: "ter", label: "Terça-feira" },
+    { key: "qua", label: "Quarta-feira" },
+    { key: "qui", label: "Quinta-feira" },
+    { key: "sex", label: "Sexta-feira" },
+    { key: "sab", label: "Sábado" },
+    { key: "dom", label: "Domingo" }
+  ];
+  var MEALS = [
+    { key: "cafe", label: "Café da manhã" },
+    { key: "almoco", label: "Almoço" },
+    { key: "lanche", label: "Lanche da tarde" },
+    { key: "jantar", label: "Jantar" },
+    { key: "ceia", label: "Ceia" }
+  ];
+  var CATEGORIES = ["Hortifruti", "Açougue e Peixaria", "Padaria", "Laticínios e Frios", "Mercearia", "Limpeza", "Higiene", "Outros"];
+  var COMODOS = ["Cozinha", "Sala", "Quarto", "Banheiro", "Lavanderia", "Área externa", "Escritório", "Geral"];
+  var TAREFA_COMODOS = ["Cozinha", "Lavanderia", "Quarto", "Sala", "Varanda"];
+  var FREQS = ["Diária", "Semanal", "Quinzenal", "Mensal", "Avulsa"];
+  var PRIORIDADES = [
+    { key: "alta", label: "Alta" },
+    { key: "media", label: "Média" },
+    { key: "baixa", label: "Baixa" }
+  ];
+  var PRIO_RANK = { alta: 0, media: 1, baixa: 2 };
+  var STATUS = [
+    { key: "a_fazer", label: "A fazer" },
+    { key: "orcando", label: "Orçando" },
+    { key: "agendado", label: "Agendado" },
+    { key: "feito", label: "Feito" }
+  ];
+  var TABS = [
+    { key: "cardapio", label: "Cardápio" },
+    { key: "receitas", label: "Receitas" },
+    { key: "dicas", label: "Dicas de culinária" },
+    { key: "compras", label: "Compras" },
+    { key: "tarefas", label: "Tarefas" },
+    { key: "reparos", label: "Reparos" },
+    { key: "exercicios", label: "Exercícios físicos" },
+    { key: "financeiro", label: "Financeiro", soon: true },
+    { key: "saude", label: "Saúde" },
+    { key: "backup", label: "Backup" }
+  ];
+  var BACKUP_LEMBRETE_DIAS = 7;
+  // Campos que são só da interface (aba aberta, filtros) não entram no backup.
+  var UI_FIELDS = ["activeTab", "comprasView", "tarefasFiltro", "dicasFiltro", "receitasFiltro", "fichasFiltro", "lastComodo", "ultimoBackup"];
+  var FICHA_FUNCOES = ["Mobilidade", "Condicionamento", "Força", "Respiratória"];
+  var FICHA_OBJETIVOS = ["Perda de peso", "Ganho de massa muscular", "Os dois"];
+  // Fichas antigas usavam "objetivo" com estes valores; viram a função equivalente.
+  var FICHA_ANTIGOS = { "Alongamento": "Mobilidade", "Aeróbico": "Condicionamento", "Musculação": "Força" };
+  // Intensidade média (MET) usada quando a ficha não informa a sua.
+  var MET_PADRAO = { "Mobilidade": 2.3, "Condicionamento": 4.0, "Força": 3.5, "Respiratória": 1.5 };
+  var DIAS_SEMANA = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
+  var MEDIDA_CAMPOS = [
+    { k: "peso", l: "Peso", u: "kg", max: 400, ex: "Ex: 70,5" },
+    { k: "cintura", l: "Cintura", u: "cm", max: 300, ex: "Ex: 80" },
+    { k: "abdomen", l: "Abdômen", u: "cm", max: 300, ex: "Ex: 90" },
+    { k: "quadril", l: "Quadril", u: "cm", max: 300, ex: "Ex: 100" },
+    { k: "braco", l: "Braço", u: "cm", max: 100, ex: "Ex: 30" },
+    { k: "coxa", l: "Coxa", u: "cm", max: 150, ex: "Ex: 55" },
+    { k: "gordura", l: "Gordura corporal", u: "%", max: 80, ex: "Ex: 30" }
+  ];
+  var FICHA_GRUPOS = ["Corpo inteiro", "Membros superiores", "Membros inferiores", "Pescoço", "Peito", "Costas", "Ombros", "Braços", "Abdômen e core", "Glúteos e quadril", "Pernas"];
+  var FICHA_NIVEIS = ["Iniciante", "Intermediário", "Avançado"];
+  var RECEITA_CATEGORIAS = ["Smoothies", "Almoço/Jantar", "Café da manhã", "Sobremesas", "Sobremesas fit", "Lanches", "Molhos", "Saladas", "Sucos", "Chás e águas saborizadas"];
+  var DICA_CATEGORIAS = [
+    "Temperos e sabores", "Carnes, aves e peixes", "Legumes e verduras", "Arroz, massas e grãos",
+    "Bolos e doces", "Pães e massas", "Conservação e congelamento", "Técnicas", "Utensílios", "Outros"
+  ];
+  function emptyCardapio() {
+    var c = {};
+    DAYS.forEach(function (d) { c[d.key] = { cafe: "", almoco: "", lanche: "", jantar: "", ceia: "" }; });
+    return c;
+  }
+  function isTabKey(k) { return TABS.some(function (t) { return t.key === k; }); }
+  function normalizeState(p) {
+    p = (p && typeof p === "object") ? p : {};
+    if (!p.cardapio) p.cardapio = emptyCardapio();
+    if (FICHA_ANTIGOS[p.fichasFiltro]) p.fichasFiltro = FICHA_ANTIGOS[p.fichasFiltro];
+    if (p.fichasFiltro !== "todas" && FICHA_FUNCOES.indexOf(p.fichasFiltro) < 0) p.fichasFiltro = "todas";
+    ["compras", "receitas", "dicas", "fichas", "medidas", "tarefas", "reparos", "casa"].forEach(function (k) {
+      if (!Array.isArray(p[k])) p[k] = [];
+    });
+    p.medidas = p.medidas.filter(function (m) { return m && typeof m === "object" && /^\d{4}-\d{2}-\d{2}$/.test(m.data); });
+    p.fichas = p.fichas.filter(function (f) { return f && typeof f === "object"; });
+    p.fichas.forEach(normalizarFicha);
+    var tp = (p.treinoPerfil && typeof p.treinoPerfil === "object") ? p.treinoPerfil : {};
+    // O peso agora vive no histórico da aba Saúde; um peso antigo do painel de treino vira a primeira medição.
+    var pesoAntigo = numPositivo(tp.peso, 400);
+    if (pesoAntigo && !p.medidas.length) p.medidas.push({ id: "m" + Date.now().toString(36), data: dataISO(new Date()), peso: pesoAntigo, obs: "" });
+    p.treinoPerfil = { metaKcal: numPositivo(tp.metaKcal, 20000) };
+    if (p.dicasFiltro !== "todas" && DICA_CATEGORIAS.indexOf(p.dicasFiltro) < 0) p.dicasFiltro = "todas";
+    if (p.receitasFiltro !== "todas" && p.receitasFiltro !== "" && RECEITA_CATEGORIAS.indexOf(p.receitasFiltro) < 0) p.receitasFiltro = "todas";
+    if (!isTabKey(p.activeTab)) p.activeTab = "cardapio";
+    if (p.comprasView !== "casa") p.comprasView = "mercado";
+    if (p.tarefasFiltro !== "todos" && TAREFA_COMODOS.indexOf(p.tarefasFiltro) < 0) p.tarefasFiltro = "todos";
+    if (COMODOS.indexOf(p.lastComodo) < 0) p.lastComodo = COMODOS[0];
+    return p;
+  }
+  function loadEmbeddedState() {
+    try {
+      var raw = document.getElementById("app-state").textContent;
+      return normalizeState(JSON.parse(raw));
+    } catch (e) {
+      return normalizeState(null);
+    }
+  }
+  // ----- state -----
+  var state = loadEmbeddedState();
+  // The active tab (and the Mercado/Casa toggle) live inside `state` so they are
+  // part of what gets published: every successful publish reloads this view from
+  // scratch, and without this the reload would land back on the first tab.
+  var activeTab = state.activeTab;
+  var receitaForm = null;
+  var receitaViewId = null;
+  var reparoForm = null;
+  var dicaForm = null;
+  var fichaForm = null;
+  var fichaViewId = null;
+  var medidaForm = null;
+  var medidaErro = null;
+  var dicaBusca = "";
+  var confirmDeleteId = null;
+  var backupMsg = null;      // { tipo: "ok"|"erro"|"aviso", texto }
+  var restoreMsg = null;
+  var restorePending = null; // { dados, criadoEm, arquivo }
+  var fileHandle = null;
+  // none | needs-permission | connected | unsupported
+  var fileStatus = FS_OK ? "none" : "unsupported";
+  var setupMsg = null;
+  var pendingFocus = null;
+  var idCounter = Date.now();
+  function uid() {
+    idCounter += 1;
+    return "id" + idCounter.toString(36);
+  }
+  // ----- DOM helpers -----
+  function el(tag, attrs, children) {
+    attrs = attrs || {};
+    var node = document.createElement(tag);
+    Object.keys(attrs).forEach(function (k) {
+      var v = attrs[k];
+      if (v === undefined || v === null) return;
+      if (k === "class") node.className = v;
+      else if (k === "text") node.textContent = v;
+      else if (k.indexOf("on") === 0 && typeof v === "function") node.addEventListener(k.slice(2), v);
+      else node.setAttribute(k, v);
+    });
+    if (children) {
+      (Array.isArray(children) ? children : [children]).forEach(function (c) {
+        if (c === null || c === undefined) return;
+        node.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+      });
+    }
+    return node;
+  }
+  function asOptions(list) {
+    return list.map(function (x) { return { key: x, label: x }; });
+  }
+  function makeSelect(options, value, label, onchange) {
+    var s = el("select", { "aria-label": label });
+    options.forEach(function (o) { s.appendChild(el("option", { value: o.key, text: o.label })); });
+    s.value = value;
+    if (onchange) s.addEventListener("change", function () { onchange(s.value); });
+    return s;
+  }
+  function labelFor(list, key) {
+    var f = list.filter(function (o) { return o.key === key; })[0];
+    return f ? f.label : key;
+  }
+  function prioBadge(key) {
+    return el("span", { class: "badge prio-" + key, text: labelFor(PRIORIDADES, key) });
+  }
+  var brl = (typeof Intl !== "undefined" && Intl.NumberFormat)
+    ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+    : null;
+  function fmtBRL(n) {
+    return brl ? brl.format(n) : "R$ " + n.toFixed(2).replace(".", ",");
+  }
+  function parsePreco(str) {
+    str = (str || "").replace(/R\$/gi, "").replace(/\s/g, "");
+    if (!str) return null;
+    if (str.indexOf(",") >= 0) str = str.replace(/\./g, "").replace(",", ".");
+    var n = parseFloat(str);
+    return (isFinite(n) && n >= 0) ? Math.round(n * 100) / 100 : null;
+  }
+  function applyFocus(id) {
+    if (!id) return;
+    var n = document.querySelector('[data-focus="' + id + '"]');
+    if (!n) return;
+    try { n.focus({ preventScroll: true }); } catch (e) { n.focus(); }
+  }
+  // ----- persistence -----
+  var saveTimer = null;
+  function setSaveStatus(status) {
+    var box = document.getElementById("save-status");
+    var text = document.getElementById("save-status-text");
+    box.className = status;
+    if (ONLINE) {
+      box.className = status === "error" ? "error" : status === "saving" ? "saving" : "saved";
+      text.textContent = status === "saving" ? "Salvando…" : status === "online" ? "Salvo online"
+        : status === "leitura" ? "Somente leitura" : status === "carregando" ? "Conectando…"
+        : status === "fora" ? "Faça login para continuar"
+        : "Erro ao salvar online. Verifique a internet.";
+      return;
+    }
+    if (status === "saving") text.textContent = "Salvando…";
+    else if (status === "saved") text.textContent = "Salvo em " + (fileHandle ? fileHandle.name : "arquivo");
+    else if (status === "local") text.textContent = "Salvo só neste navegador";
+    else text.textContent = "Não foi possível salvar no arquivo";
+  }
+  // --- IndexedDB: guarda a "ligação" com o arquivo de dados entre aberturas ---
+  function idbOpen() {
+    return new Promise(function (res, rej) {
+      var r = indexedDB.open(IDB_NAME, 1);
+      r.onupgradeneeded = function () { r.result.createObjectStore(IDB_STORE); };
+      r.onsuccess = function () { res(r.result); };
+      r.onerror = function () { rej(r.error); };
+    });
+  }
+  function idbReq(mode, fn) {
+    return idbOpen().then(function (db) {
+      return new Promise(function (res, rej) {
+        var q = fn(db.transaction(IDB_STORE, mode).objectStore(IDB_STORE));
+        q.onsuccess = function () { res(q.result); };
+        q.onerror = function () { rej(q.error); };
+      });
+    });
+  }
+  function idbGet(k) { return idbReq("readonly", function (s) { return s.get(k); }); }
+  function idbSet(k, v) { return idbReq("readwrite", function (s) { return s.put(v, k); }); }
+  function idbDel(k) { return idbReq("readwrite", function (s) { return s.delete(k); }); }
+  // --- formato do arquivo (igual ao do backup) ---
+  function envelope(dados) {
+    return JSON.stringify({ app: "casa-em-ordem", versao: 1, salvoEm: new Date().toISOString(), dados: dados }, null, 2);
+  }
+  function extrairDados(parsed) {
+    var dados = (parsed && parsed.app === "casa-em-ordem" && parsed.dados) ? parsed.dados : parsed;
+    var valido = dados && typeof dados === "object" && (
+      Array.isArray(dados.receitas) || Array.isArray(dados.compras) || Array.isArray(dados.dicas) || Array.isArray(dados.fichas) || Array.isArray(dados.medidas) ||
+      Array.isArray(dados.tarefas) || Array.isArray(dados.reparos) ||
+      Array.isArray(dados.casa) || (dados.cardapio && typeof dados.cardapio === "object")
+    );
+    return valido ? dados : null;
+  }
+  function lerDoArquivo(handle) {
+    return handle.getFile().then(function (f) { return f.text(); }).then(function (txt) {
+      if (!txt.trim()) return { vazio: true };
+      var dados = extrairDados(JSON.parse(txt));
+      if (!dados) throw new Error("formato");
+      return { dados: dados };
+    });
+  }
+  function aplicarDados(dados) {
+    state = normalizeState(JSON.parse(JSON.stringify(dados)));
+    activeTab = state.activeTab;
+    receitaForm = null; reparoForm = null; receitaViewId = null; confirmDeleteId = null;
+  }
+  function conectar(handle, lerPrimeiro) {
+    // lerPrimeiro: true = carrega o conteúdo do arquivo; false = grava os dados atuais nele
+    var passo = lerPrimeiro ? lerDoArquivo(handle) : Promise.resolve({ vazio: true });
+    return passo.then(function (r) {
+      fileHandle = handle;
+      fileStatus = "connected";
+      setupMsg = null;
+      if (r.dados) aplicarDados(r.dados);
+      idbSet("dados", handle).catch(function () {});
+      if (!r.dados) doPersist(); else { salvarNoNavegador(); setSaveStatus("saved"); }
+      renderAll();
+    });
+  }
+  function erroSetup(err) {
+    if (err && err.name === "AbortError") return; // janela fechada sem escolher
+    setupMsg = { tipo: "erro", texto: (err && err.message === "formato")
+      ? "Esse arquivo não é um arquivo de dados do Casa em Ordem."
+      : "Não foi possível usar esse arquivo. Tente de novo." };
+    renderAll();
+  }
+  function criarArquivoDados() {
+    window.showSaveFilePicker({ suggestedName: "casa-dados.json", id: "casa-dados", types: JSON_TYPES })
+      .then(function (h) { return conectar(h, false); })
+      .catch(erroSetup);
+  }
+  function abrirArquivoDados() {
+    window.showOpenFilePicker({ id: "casa-dados", types: JSON_TYPES, multiple: false })
+      .then(function (hs) {
+        var h = hs[0];
+        return h.requestPermission({ mode: "readwrite" }).then(function (p) {
+          if (p !== "granted") throw new Error("permissao");
+          return conectar(h, true);
+        });
+      })
+      .catch(erroSetup);
+  }
+  function reconectarArquivo() {
+    if (!fileHandle) return;
+    fileHandle.requestPermission({ mode: "readwrite" }).then(function (p) {
+      if (p !== "granted") throw new Error("permissao");
+      return conectar(fileHandle, true);
+    }).catch(erroSetup);
+  }
+  function desconectarArquivo() {
+    fileHandle = null;
+    fileStatus = "none";
+    idbDel("dados").catch(function () {});
+    setSaveStatus("local");
+    renderAll();
+  }
+  function salvarNoNavegador() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  var writeChain = Promise.resolve();
+  function doPersist() {
+    if (ONLINE) { salvarUI(); salvarOnline(); return; }
+    salvarNoNavegador();
+    pendingFocus = null;
+    if (fileStatus !== "connected" || !fileHandle) { setSaveStatus("local"); return; }
+    var conteudo = envelope(state);
+    var h = fileHandle;
+    writeChain = writeChain.then(function () {
+      return h.createWritable().then(function (w) {
+        return w.write(conteudo).then(function () { return w.close(); });
+      });
+    }).then(function () {
+      setSaveStatus("saved");
+    }).catch(function () {
+      setSaveStatus("error");
+    });
+  }
+  function renderSetup(container) {
+    if (ONLINE) { renderOnlineSetup(container); return; }
+    if (fileStatus === "connected") return;
+    var p = el("div", { class: "setup-panel" });
+    if (fileStatus === "unsupported") {
+      p.appendChild(el("h3", { text: "Abra esta página no Google Chrome" }));
+      p.appendChild(el("p", { text: "Este navegador não permite salvar num arquivo do computador. Por enquanto os dados ficam guardados só neste navegador — use a aba Backup para guardar uma cópia." }));
+    } else if (fileStatus === "needs-permission") {
+      p.appendChild(el("h3", { text: "Reabrir seus dados" }));
+      p.appendChild(el("p", { text: "Por segurança, o Chrome pede sua autorização cada vez que a página é aberta para usar o arquivo \"" + (fileHandle ? fileHandle.name : "") + "\"." }));
+      var row = el("div", { class: "backup-row" });
+      var b = el("button", { class: "btn-primary", type: "button", text: "Abrir meus dados" });
+      b.addEventListener("click", reconectarArquivo);
+      var outro = el("button", { class: "btn-text", type: "button", text: "Usar outro arquivo" });
+      outro.addEventListener("click", desconectarArquivo);
+      row.appendChild(b); row.appendChild(outro);
+      p.appendChild(row);
+    } else {
+      p.appendChild(el("h3", { text: "Onde guardar seus dados?" }));
+      p.appendChild(el("p", { text: "Os dados ficam num arquivo separado, guardado por você. Pasta sugerida (ao lado deste arquivo):" }));
+      p.appendChild(el("p", {}, [el("code", { text: "Casa\\Sistema Casa Claude\\CasaDados" })]));
+      var ol = el("ol");
+      ol.appendChild(el("li", { text: "Primeira vez: clique em \"Criar arquivo de dados\" e salve como casa-dados.json nessa pasta. Depois traga seus dados antigos pela aba Backup → Restaurar." }));
+      ol.appendChild(el("li", { text: "Já tem o arquivo: clique em \"Abrir arquivo de dados\" e escolha o casa-dados.json." }));
+      p.appendChild(ol);
+      var row2 = el("div", { class: "backup-row" });
+      var c = el("button", { class: "btn-primary", type: "button", text: "Criar arquivo de dados" });
+      c.addEventListener("click", criarArquivoDados);
+      var a = el("button", { class: "btn-secondary", type: "button", text: "Abrir arquivo de dados" });
+      a.addEventListener("click", abrirArquivoDados);
+      row2.appendChild(c); row2.appendChild(a);
+      p.appendChild(row2);
+    }
+    if (setupMsg) p.appendChild(el("p", { class: "backup-msg " + setupMsg.tipo, text: setupMsg.texto }));
+    container.appendChild(p);
+  }
+  function schedulePersist() {
+    setSaveStatus("saving");
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(doPersist, 350);
+  }
+  // ----- generic list mutations -----
+  function findById(list, id) {
+    return list.filter(function (i) { return i.id === id; })[0];
+  }
+  function toggleField(key, id, field) {
+    var item = findById(state[key], id);
+    if (!item) return;
+    item[field] = !item[field];
+    schedulePersist();
+    renderContent();
+  }
+  function removeById(key, id) {
+    state[key] = state[key].filter(function (i) { return i.id !== id; });
+    schedulePersist();
+    renderContent();
+  }
+  function clearDone(key, field) {
+    state[key] = state[key].filter(function (i) { return !i[field]; });
+    schedulePersist();
+    renderContent();
+  }
+  // ----- mutations: compras (mercado) -----
+  function addComprasItems(list, categoria) {
+    var added = false;
+    list.forEach(function (texto) {
+      texto = (texto || "").trim();
+      if (!texto) return;
+      state.compras.push({ id: uid(), texto: texto, categoria: categoria, comprado: false });
+      added = true;
+    });
+    if (added) schedulePersist();
+    return added;
+  }
+  function sendMealToCompras(diaKey, mealKey, btnEl) {
+    var texto = (state.cardapio[diaKey][mealKey] || "").trim();
+    if (!texto) return;
+    addComprasItems([texto], "Outros");
+    if (btnEl) {
+      var original = btnEl.textContent;
+      btnEl.textContent = "Adicionado ✓";
+      btnEl.disabled = true;
+      setTimeout(function () { btnEl.textContent = original; btnEl.disabled = false; }, 1200);
+    }
+  }
+  // ----- mutations: receitas -----
+  function saveReceita() {
+    var nome = receitaForm.nome.trim();
+    if (!nome) return;
+    var draft = (receitaForm.ingredienteDraft || "").trim();
+    if (draft) receitaForm.ingredientes.push(draft);
+    var link = (receitaForm.link || "").trim();
+    if (link && !/^https?:\/\//i.test(link) && /^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(link)) link = "https://" + link;
+    if (receitaForm.editingId) {
+      var r = findById(state.receitas, receitaForm.editingId);
+      if (r) {
+        r.nome = nome;
+        r.ingredientes = receitaForm.ingredientes.slice();
+        r.modoPreparo = receitaForm.modoPreparo.trim();
+        r.link = link;
+        r.fonte = (receitaForm.fonte || "").trim();
+        r.categoria = receitaForm.categoria || "";
+      }
+    } else {
+      state.receitas.push({
+        id: uid(),
+        nome: nome,
+        ingredientes: receitaForm.ingredientes.slice(),
+        modoPreparo: receitaForm.modoPreparo.trim(),
+        link: link,
+        fonte: (receitaForm.fonte || "").trim(),
+        categoria: receitaForm.categoria || ""
+      });
+    }
+    receitaForm = null;
+    schedulePersist();
+    renderContent();
+  }
+  // ----- mutations: reparos -----
+  function newReparoForm() {
+    return { editingId: null, descricao: "", comodo: state.lastComodo, prioridade: "media", status: "a_fazer", obs: "" };
+  }
+  function saveReparo() {
+    var descricao = reparoForm.descricao.trim();
+    if (!descricao) return;
+    state.lastComodo = reparoForm.comodo;
+    if (reparoForm.editingId) {
+      var r = findById(state.reparos, reparoForm.editingId);
+      if (r) {
+        r.descricao = descricao;
+        r.comodo = reparoForm.comodo;
+        r.prioridade = reparoForm.prioridade;
+        r.status = reparoForm.status;
+        r.obs = reparoForm.obs.trim();
+      }
+    } else {
+      state.reparos.push({
+        id: uid(),
+        descricao: descricao,
+        comodo: reparoForm.comodo,
+        prioridade: reparoForm.prioridade,
+        status: reparoForm.status,
+        obs: reparoForm.obs.trim()
+      });
+    }
+    reparoForm = null;
+    schedulePersist();
+    renderContent();
+  }
+  // ----- shared renderers -----
+  function sortItems(items, doneField) {
+    return items.slice().sort(function (a, b) {
+      var da = a[doneField] ? 1 : 0, db = b[doneField] ? 1 : 0;
+      if (da !== db) return da - db;
+      return (PRIO_RANK[a.prioridade] === undefined ? 1 : PRIO_RANK[a.prioridade]) -
+             (PRIO_RANK[b.prioridade] === undefined ? 1 : PRIO_RANK[b.prioridade]);
+    });
+  }
+  function renderGrouped(container, items, groups, getGroup, rowFn, fallback) {
+    groups.forEach(function (g) {
+      var inGroup = items.filter(function (i) { return getGroup(i) === g; });
+      if (!inGroup.length) return;
+      var wrap = el("div", { class: "categoria-group" });
+      wrap.appendChild(el("div", { class: "categoria-title", text: g }));
+      inGroup.forEach(function (i) { wrap.appendChild(rowFn(i)); });
+      container.appendChild(wrap);
+    });
+    var strays = items.filter(function (i) { return groups.indexOf(getGroup(i)) < 0; });
+    if (strays.length) {
+      var w = el("div", { class: "categoria-group" });
+      w.appendChild(el("div", { class: "categoria-title", text: fallback }));
+      strays.forEach(function (i) { w.appendChild(rowFn(i)); });
+      container.appendChild(w);
+    }
+  }
+  function renderCheckRow(item, doneField, key, extras) {
+    var done = !!item[doneField];
+    var row = el("div", { class: "item-row" + (done ? " done" : "") });
+    var cb = el("input", { type: "checkbox", "aria-label": "Marcar " + item.texto });
+    cb.checked = done;
+    cb.addEventListener("change", function () { toggleField(key, item.id, doneField); });
+    row.appendChild(cb);
+    row.appendChild(el("span", { class: "item-text", text: item.texto }));
+    (extras || []).forEach(function (x) { row.appendChild(x); });
+    var rm = el("button", { class: "item-remove", type: "button", text: "×", "aria-label": "Remover " + item.texto });
+    rm.addEventListener("click", function () { removeById(key, item.id); });
+    row.appendChild(rm);
+    return row;
+  }
+  function renderListMeta(container, done, total, label, key, doneField, clearLabel) {
+    var meta = el("div", { class: "compras-meta" });
+    meta.appendChild(el("span", { text: done + " de " + total + " " + label }));
+    if (done > 0) {
+      var clearBtn = el("button", { class: "btn-text", type: "button", text: clearLabel });
+      clearBtn.addEventListener("click", function () { clearDone(key, doneField); });
+      meta.appendChild(clearBtn);
+    }
+    container.appendChild(meta);
+  }
+  // ----- backup -----
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function dataISO(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+  function fmtDataHora(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return pad2(d.getDate()) + "/" + pad2(d.getMonth() + 1) + "/" + d.getFullYear() + " às " + pad2(d.getHours()) + "h" + pad2(d.getMinutes());
+  }
+  function diasDesde(iso) {
+    var d = new Date(iso);
+    if (!iso || isNaN(d.getTime())) return null;
+    return Math.floor((Date.now() - d.getTime()) / 86400000);
+  }
+  function backupAtrasado() {
+    var dias = diasDesde(state.ultimoBackup);
+    return dias === null || dias >= BACKUP_LEMBRETE_DIAS;
+  }
+  function dadosParaBackup() {
+    var dados = {};
+    Object.keys(state).forEach(function (k) {
+      if (UI_FIELDS.indexOf(k) < 0) dados[k] = state[k];
+    });
+    return dados;
+  }
+  function resumoDados(d) {
+    var cardapioPreenchido = 0;
+    if (d.cardapio) {
+      Object.keys(d.cardapio).forEach(function (dia) {
+        Object.keys(d.cardapio[dia] || {}).forEach(function (m) { if (d.cardapio[dia][m]) cardapioPreenchido += 1; });
+      });
+    }
+    function n(k) { return Array.isArray(d[k]) ? d[k].length : 0; }
+    return [
+      n("receitas") + " receitas",
+      n("dicas") + " dicas de culinária",
+      n("fichas") + " fichas de exercício",
+      n("medidas") + " medições de peso e medidas",
+      n("compras") + " itens de mercado",
+      n("casa") + " itens de casa",
+      n("tarefas") + " tarefas",
+      n("reparos") + " reparos",
+      cardapioPreenchido + " refeições no cardápio"
+    ];
+  }
+  function marcarBackupFeito() {
+    state.ultimoBackup = new Date().toISOString();
+    schedulePersist();
+  }
+  function baixarComLink(nome, texto) {
+    var blob = new Blob([texto], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = el("a", { href: url, download: nome });
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  }
+  function exportarBackup(btn) {
+    var agora = new Date();
+    var nome = "casa-em-ordem-backup-" + dataISO(agora) + ".json";
+    var conteudo = JSON.stringify({
+      app: "casa-em-ordem",
+      versao: 1,
+      criadoEm: agora.toISOString(),
+      dados: dadosParaBackup()
+    }, null, 2);
+    function fim(msg) {
+      backupMsg = msg;
+      renderContent();
+    }
+    function viaDownload() {
+      try {
+        baixarComLink(nome, conteudo);
+        marcarBackupFeito();
+        fim({ tipo: "ok", texto: "Backup salvo como \"" + nome + "\" na pasta Downloads. Mova para Sistema Casa Claude\\CasaDados\\backups." });
+      } catch (e) {
+        fim({ tipo: "erro", texto: "Não foi possível gerar o arquivo de backup." });
+      }
+    }
+    if (!FS_OK) { viaDownload(); return; }
+    // No Chrome: escolhe onde salvar (o Chrome lembra a última pasta usada).
+    window.showSaveFilePicker({ suggestedName: nome, id: "casa-backups", types: JSON_TYPES })
+      .then(function (h) {
+        return h.createWritable().then(function (w) {
+          return w.write(conteudo).then(function () { return w.close(); });
+        }).then(function () { return h.name; });
+      })
+      .then(function (salvoComo) {
+        marcarBackupFeito();
+        fim({ tipo: "ok", texto: "Backup salvo como \"" + salvoComo + "\"." });
+      })
+      .catch(function (err) {
+        if (err && err.name === "AbortError") fim({ tipo: "aviso", texto: "Cancelado. Nenhum backup foi salvo." });
+        else viaDownload();
+      });
+  }
+  function lerArquivoBackup(file) {
+    restorePending = null;
+    restoreMsg = null;
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var parsed = JSON.parse(String(reader.result));
+        // Aceita o formato de backup e também um estado "cru" (sem envelope).
+        var dados = extrairDados(parsed);
+        if (!dados) throw new Error("formato");
+        restorePending = { dados: dados, criadoEm: parsed.criadoEm || parsed.salvoEm || null, arquivo: file.name };
+      } catch (e) {
+        restoreMsg = { tipo: "erro", texto: "Esse arquivo não parece ser um backup do Casa em Ordem." };
+      }
+      renderContent();
+    };
+    reader.onerror = function () {
+      restoreMsg = { tipo: "erro", texto: "Não foi possível ler o arquivo." };
+      renderContent();
+    };
+    reader.readAsText(file);
+  }
+  function confirmarRestauracao() {
+    if (!restorePending) return;
+    var dados = restorePending.dados;
+    var manter = { activeTab: "backup", comprasView: state.comprasView, tarefasFiltro: state.tarefasFiltro, lastComodo: state.lastComodo, ultimoBackup: state.ultimoBackup };
+    var novo = JSON.parse(JSON.stringify(dados));
+    UI_FIELDS.forEach(function (k) { delete novo[k]; });
+    Object.keys(manter).forEach(function (k) { if (manter[k] !== undefined) novo[k] = manter[k]; });
+    state = normalizeState(novo);
+    activeTab = "backup";
+    receitaForm = null; reparoForm = null; receitaViewId = null; confirmDeleteId = null;
+    restorePending = null;
+    restoreMsg = { tipo: "ok", texto: "Dados restaurados do backup." };
+    schedulePersist();
+    renderAll();
+  }
+  function renderBackup(container) {
+    var wrap = el("div", { class: "backup-wrap" });
+
+    // Arquivo de dados em uso
+    if (fileStatus === "connected" && fileHandle) {
+      var arq = el("div", { class: "backup-card" });
+      arq.appendChild(el("h3", { text: "Arquivo de dados" }));
+      arq.appendChild(el("p", { text: "Tudo o que você faz é salvo automaticamente em \"" + fileHandle.name + "\", no seu computador." }));
+      var rowA = el("div", { class: "backup-row" });
+      var trocar = el("button", { class: "btn-text", type: "button", text: "Trocar de arquivo" });
+      trocar.addEventListener("click", desconectarArquivo);
+      rowA.appendChild(trocar);
+      arq.appendChild(rowA);
+      wrap.appendChild(arq);
+    }
+
+    // Exportar
+    var exp = el("div", { class: "backup-card" });
+    exp.appendChild(el("h3", { text: "Fazer uma cópia de segurança" }));
+    exp.appendChild(el("p", { text: "Salva uma cópia datada de todos os dados. Sugestão: guarde em Sistema Casa Claude\\CasaDados\\backups." }));
+    var dias = diasDesde(state.ultimoBackup);
+    var last = el("div", { class: "backup-last" + (backupAtrasado() ? " atrasado" : "") });
+    if (dias === null) {
+      last.appendChild(document.createTextNode("Último backup: "));
+      last.appendChild(el("strong", { text: "nenhum ainda" }));
+    } else {
+      last.appendChild(document.createTextNode("Último backup: "));
+      last.appendChild(el("strong", { text: fmtDataHora(state.ultimoBackup) }));
+      last.appendChild(document.createTextNode(dias === 0 ? " (hoje)" : dias === 1 ? " (ontem)" : " (há " + dias + " dias)"));
+    }
+    exp.appendChild(last);
+    var resumo = el("div", { class: "backup-resumo" });
+    resumoDados(state).forEach(function (t) { resumo.appendChild(el("span", { text: t })); });
+    exp.appendChild(resumo);
+    var row = el("div", { class: "backup-row" });
+    var btn = el("button", { class: "btn-primary", type: "button", text: "Salvar backup agora" });
+    btn.addEventListener("click", function () { backupMsg = null; exportarBackup(btn); });
+    row.appendChild(btn);
+    exp.appendChild(row);
+    if (backupMsg) exp.appendChild(el("p", { class: "backup-msg " + backupMsg.tipo, text: backupMsg.texto }));
+    wrap.appendChild(exp);
+
+    // Restaurar
+    var imp = el("div", { class: "backup-card" });
+    imp.appendChild(el("h3", { text: "Restaurar a partir de um backup" }));
+    imp.appendChild(el("p", { text: "Escolha um arquivo de backup salvo antes. Você verá o que ele contém antes de confirmar." }));
+    var fileInput = el("input", { type: "file", accept: ".json,application/json", "aria-label": "Arquivo de backup" });
+    fileInput.style.display = "none";
+    fileInput.addEventListener("change", function () { lerArquivoBackup(fileInput.files && fileInput.files[0]); });
+    var pickBtn = el("button", { class: "btn-secondary", type: "button", text: "Escolher arquivo de backup…" });
+    pickBtn.addEventListener("click", function () { fileInput.click(); });
+    var row2 = el("div", { class: "backup-row" });
+    row2.appendChild(pickBtn);
+    row2.appendChild(fileInput);
+    imp.appendChild(row2);
+    if (restorePending) {
+      var prev = el("div", { class: "restore-preview" });
+      var info = "Arquivo \"" + restorePending.arquivo + "\"";
+      if (restorePending.criadoEm && fmtDataHora(restorePending.criadoEm)) info += ", criado em " + fmtDataHora(restorePending.criadoEm);
+      prev.appendChild(el("p", { text: info + ". Ele contém:" }));
+      var r2 = el("div", { class: "backup-resumo" });
+      resumoDados(restorePending.dados).forEach(function (t) { r2.appendChild(el("span", { text: t })); });
+      prev.appendChild(r2);
+      prev.appendChild(el("p", { text: "Restaurar substitui TODOS os dados atuais pelos do arquivo. Se quiser guardar o que está aqui agora, baixe um backup antes." }));
+      var acts = el("div", { class: "backup-row" });
+      var ok = el("button", { class: "btn-danger", type: "button", text: "Substituir dados atuais" });
+      ok.addEventListener("click", confirmarRestauracao);
+      var cancel = el("button", { class: "btn-text", type: "button", text: "Cancelar" });
+      cancel.addEventListener("click", function () { restorePending = null; renderContent(); });
+      acts.appendChild(ok);
+      acts.appendChild(cancel);
+      prev.appendChild(acts);
+      imp.appendChild(prev);
+    }
+    if (restoreMsg) imp.appendChild(el("p", { class: "backup-msg " + restoreMsg.tipo, text: restoreMsg.texto }));
+    wrap.appendChild(imp);
+
+    container.appendChild(wrap);
+  }
+  // ----- render: nav -----
+  function renderNav() {
+    var nav = document.getElementById("tabs-nav");
+    nav.innerHTML = "";
+    if (ONLINE && online.status !== "pronto") return;
+    TABS.forEach(function (t) {
+      if (!abaVisivel(t.key)) return;
+      var classes = "tab-btn" + (activeTab === t.key ? " active" : "") + (t.soon ? " soon" : "");
+      var dot = (t.key === "backup" && backupAtrasado()) ? el("span", { class: "alert-dot", title: "Faz tempo desde o último backup" }) : null;
+      var btn = el("button", { class: classes, type: "button", onclick: function () { activeTab = t.key; state.activeTab = t.key; importMsg = null; renderAll(); } },
+        [t.label, t.soon ? el("span", { class: "soon-badge", text: "em breve" }) : null, dot]);
+      nav.appendChild(btn);
+    });
+  }
+  // ----- render: cardápio -----
+  function renderCardapio(container) {
+    container.appendChild(el("p", { class: "section-hint", text: "Edite cada refeição da semana e use \"+ compras\" para mandar direto para a lista." }));
+    var grid = el("div", { class: "week-grid" });
+    DAYS.forEach(function (day) {
+      var card = el("div", { class: "day-card" });
+      card.appendChild(el("h3", { text: day.label }));
+      MEALS.forEach(function (meal) {
+        var value = state.cardapio[day.key][meal.key] || "";
+        var row = el("div", { class: "meal-row" });
+        row.appendChild(el("label", { text: meal.label }));
+        var inputRow = el("div", { class: "meal-input-row" });
+        var input = el("input", {
+          type: "text",
+          value: value,
+          placeholder: "Adicionar...",
+          "aria-label": meal.label + " de " + day.label
+        });
+        input.addEventListener("change", function (e) {
+          state.cardapio[day.key][meal.key] = e.target.value.trim();
+          schedulePersist();
+        });
+        var addBtn = el("button", { class: "btn-add-compra", type: "button", title: "Adicionar à lista de compras", text: "+ compras" });
+        addBtn.addEventListener("click", function () { sendMealToCompras(day.key, meal.key, addBtn); });
+        inputRow.appendChild(input);
+        inputRow.appendChild(addBtn);
+        row.appendChild(inputRow);
+        card.appendChild(row);
+      });
+      grid.appendChild(card);
+    });
+    container.appendChild(grid);
+  }
+  // ----- render: compras (Mercado | Casa) -----
+  function renderCompras(container) {
+    var toggle = el("div", { class: "seg-toggle", role: "group", "aria-label": "Tipo de lista de compras" });
+    [{ key: "mercado", label: "Mercado" }, { key: "casa", label: "Casa" }].forEach(function (o) {
+      var active = state.comprasView === o.key;
+      var b = el("button", { class: "seg-btn" + (active ? " active" : ""), type: "button", "aria-pressed": active ? "true" : "false", text: o.label });
+      b.addEventListener("click", function () { state.comprasView = o.key; renderContent(); });
+      toggle.appendChild(b);
+    });
+    container.appendChild(toggle);
+    if (state.comprasView === "casa") renderComprasCasa(container);
+    else renderComprasMercado(container);
+  }
+  function renderComprasMercado(container) {
+    var form = el("div", { class: "compras-form" });
+    var input = el("input", { type: "text", placeholder: "Adicionar item...", "aria-label": "Novo item", "data-focus": "mercado-input" });
+    var select = makeSelect(asOptions(CATEGORIES), CATEGORIES[0], "Categoria");
+    var addBtn = el("button", { class: "btn-primary", type: "button", text: "Adicionar" });
+    function doAdd() {
+      var val = input.value.trim();
+      if (!val) return;
+      addComprasItems([val], select.value);
+      pendingFocus = "mercado-input";
+      renderContent();
+      applyFocus("mercado-input");
+    }
+    addBtn.addEventListener("click", doAdd);
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); doAdd(); } });
+    form.appendChild(input);
+    form.appendChild(select);
+    form.appendChild(addBtn);
+    container.appendChild(form);
+    var total = state.compras.length;
+    var comprados = state.compras.filter(function (i) { return i.comprado; }).length;
+    renderListMeta(container, comprados, total, "itens", "compras", "comprado", "Limpar comprados");
+    if (total === 0) {
+      container.appendChild(el("p", { class: "empty-state", text: "Nenhum item na lista de compras." }));
+      return;
+    }
+    renderGrouped(container, state.compras, CATEGORIES, function (i) { return i.categoria; }, function (item) {
+      return renderCheckRow(item, "comprado", "compras", []);
+    }, "Outros");
+  }
+  function renderComprasCasa(container) {
+    var form = el("div", { class: "compras-form" });
+    var input = el("input", { type: "text", placeholder: "Adicionar item de casa...", "aria-label": "Novo item de casa", "data-focus": "casa-input" });
+    var comodoSel = makeSelect(asOptions(COMODOS), state.lastComodo, "Cômodo");
+    var prioSel = makeSelect(PRIORIDADES, "media", "Prioridade");
+    var precoInput = el("input", { type: "text", inputmode: "decimal", class: "input-preco", placeholder: "Preço (R$)", "aria-label": "Preço estimado em reais" });
+    var addBtn = el("button", { class: "btn-primary", type: "button", text: "Adicionar" });
+    function doAdd() {
+      var val = input.value.trim();
+      if (!val) return;
+      state.lastComodo = comodoSel.value;
+      state.casa.push({
+        id: uid(),
+        texto: val,
+        comodo: comodoSel.value,
+        prioridade: prioSel.value,
+        preco: parsePreco(precoInput.value),
+        comprado: false
+      });
+      schedulePersist();
+      pendingFocus = "casa-input";
+      renderContent();
+      applyFocus("casa-input");
+    }
+    addBtn.addEventListener("click", doAdd);
+    [input, precoInput].forEach(function (inp) {
+      inp.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); doAdd(); } });
+    });
+    form.appendChild(input);
+    form.appendChild(comodoSel);
+    form.appendChild(prioSel);
+    form.appendChild(precoInput);
+    form.appendChild(addBtn);
+    container.appendChild(form);
+
+    var aComprar = 0, jaComprado = 0, semPreco = 0;
+    state.casa.forEach(function (i) {
+      if (typeof i.preco !== "number") { if (!i.comprado) semPreco += 1; return; }
+      if (i.comprado) jaComprado += i.preco; else aComprar += i.preco;
+    });
+    var totais = el("div", { class: "totais" });
+    var t1 = el("div", { class: "total-tile destaque" });
+    t1.appendChild(el("span", { class: "total-label", text: "A comprar (estimado)" }));
+    t1.appendChild(el("span", { class: "total-valor", text: fmtBRL(aComprar) }));
+    if (semPreco > 0) t1.appendChild(el("span", { class: "total-sub", text: semPreco + (semPreco === 1 ? " item sem preço" : " itens sem preço") }));
+    var t2 = el("div", { class: "total-tile" });
+    t2.appendChild(el("span", { class: "total-label", text: "Já comprado" }));
+    t2.appendChild(el("span", { class: "total-valor", text: fmtBRL(jaComprado) }));
+    totais.appendChild(t1);
+    totais.appendChild(t2);
+    container.appendChild(totais);
+
+    var total = state.casa.length;
+    var comprados = state.casa.filter(function (i) { return i.comprado; }).length;
+    renderListMeta(container, comprados, total, "itens", "casa", "comprado", "Limpar comprados");
+    if (total === 0) {
+      container.appendChild(el("p", { class: "empty-state", text: "Nenhum item de casa ainda. Adicione utensílios, decoração, eletrodomésticos ou materiais." }));
+      return;
+    }
+    renderGrouped(container, sortItems(state.casa, "comprado"), COMODOS, function (i) { return i.comodo; }, function (item) {
+      var extras = [prioBadge(item.prioridade)];
+      if (typeof item.preco === "number") extras.push(el("span", { class: "item-preco", text: fmtBRL(item.preco) }));
+      return renderCheckRow(item, "comprado", "casa", extras);
+    }, "Geral");
+  }
+  // ----- render: tarefas (por cômodo) -----
+  function renderTarefas(container) {
+    var filter = state.tarefasFiltro;
+    container.appendChild(el("p", { class: "section-hint", text: "Tarefas da casa por cômodo, com a frequência de cada uma." }));
+
+    var chips = el("div", { class: "room-chips", role: "group", "aria-label": "Filtrar por cômodo" });
+    function addChip(key, label, pending) {
+      var active = filter === key;
+      var chip = el("button", { class: "chip" + (active ? " active" : ""), type: "button", "aria-pressed": active ? "true" : "false" }, [
+        label, pending > 0 ? el("span", { class: "chip-count", text: String(pending) }) : null
+      ]);
+      chip.addEventListener("click", function () { state.tarefasFiltro = key; renderContent(); });
+      chips.appendChild(chip);
+    }
+    addChip("todos", "Todos", state.tarefas.filter(function (t) { return !t.feita; }).length);
+    TAREFA_COMODOS.forEach(function (c) {
+      addChip(c, c, state.tarefas.filter(function (t) { return t.comodo === c && !t.feita; }).length);
+    });
+    container.appendChild(chips);
+
+    var form = el("div", { class: "compras-form" });
+    var input = el("input", { type: "text", placeholder: "Adicionar tarefa...", "aria-label": "Nova tarefa", "data-focus": "tarefas-input" });
+    var comodoSel = makeSelect(asOptions(TAREFA_COMODOS), filter !== "todos" ? filter : TAREFA_COMODOS[0], "Cômodo");
+    var freqSel = makeSelect(asOptions(FREQS), "Semanal", "Frequência");
+    var addBtn = el("button", { class: "btn-primary", type: "button", text: "Adicionar" });
+    function doAdd() {
+      var val = input.value.trim();
+      if (!val) return;
+      state.tarefas.push({ id: uid(), texto: val, comodo: comodoSel.value, frequencia: freqSel.value, feita: false });
+      schedulePersist();
+      pendingFocus = "tarefas-input";
+      renderContent();
+      applyFocus("tarefas-input");
+    }
+    addBtn.addEventListener("click", doAdd);
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); doAdd(); } });
+    form.appendChild(input);
+    form.appendChild(comodoSel);
+    form.appendChild(freqSel);
+    form.appendChild(addBtn);
+    container.appendChild(form);
+
+    // tarefas de cômodos fora da lista (ex.: criadas em versões antigas) ficam em "Geral"
+    function roomOf(t) { return TAREFA_COMODOS.indexOf(t.comodo) >= 0 ? t.comodo : "Geral"; }
+    var groups = TAREFA_COMODOS.concat(["Geral"]).filter(function (c) {
+      if (c === "Geral") return filter === "todos" && state.tarefas.some(function (t) { return roomOf(t) === "Geral"; });
+      return filter === "todos" || filter === c;
+    });
+
+    groups.forEach(function (room) {
+      var items = state.tarefas.filter(function (t) { return roomOf(t) === room; });
+      var done = items.filter(function (t) { return t.feita; }).length;
+      var section = el("div", { class: "categoria-group" });
+      var head = el("div", { class: "room-head" });
+      head.appendChild(el("div", { class: "categoria-title", text: room + (items.length ? " · " + done + " de " + items.length : "") }));
+      if (done > 0) {
+        var actions = el("div", { class: "room-actions" });
+        var resetBtn = el("button", { class: "btn-text", type: "button", text: "Desmarcar feitas" });
+        resetBtn.addEventListener("click", function () {
+          items.forEach(function (t) { t.feita = false; });
+          schedulePersist();
+          renderContent();
+        });
+        var clearBtn = el("button", { class: "btn-text", type: "button", text: "Remover feitas" });
+        clearBtn.addEventListener("click", function () {
+          state.tarefas = state.tarefas.filter(function (t) { return !(roomOf(t) === room && t.feita); });
+          schedulePersist();
+          renderContent();
+        });
+        actions.appendChild(resetBtn);
+        actions.appendChild(clearBtn);
+        head.appendChild(actions);
+      }
+      section.appendChild(head);
+      if (items.length === 0) {
+        section.appendChild(el("p", { class: "room-empty", text: "Nenhuma tarefa nesse cômodo ainda." }));
+      }
+      items.forEach(function (t) {
+        section.appendChild(renderCheckRow(t, "feita", "tarefas", [
+          el("span", { class: "freq-badge", text: t.frequencia || "Avulsa" })
+        ]));
+      });
+      container.appendChild(section);
+    });
+  }
+  // ----- render: reparos -----
+  function renderReparoForm() {
+    var f = reparoForm;
+    var form = el("div", { class: "form-panel" });
+    form.appendChild(el("label", { class: "field-label", text: "Descrição" }));
+    var descInput = el("input", { type: "text", value: f.descricao, placeholder: "Ex: Torneira da cozinha pingando", "aria-label": "Descrição do reparo", "data-focus": "reparo-descricao" });
+    descInput.addEventListener("input", function (e) { f.descricao = e.target.value; });
+    descInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); saveReparo(); } });
+    form.appendChild(descInput);
+    var selects = el("div", { class: "form-selects" });
+    function field(label, select) {
+      var d = el("div");
+      d.appendChild(el("label", { class: "field-label", text: label }));
+      d.appendChild(select);
+      selects.appendChild(d);
+    }
+    field("Cômodo", makeSelect(asOptions(COMODOS), f.comodo, "Cômodo", function (v) { f.comodo = v; }));
+    field("Prioridade", makeSelect(PRIORIDADES, f.prioridade, "Prioridade", function (v) { f.prioridade = v; }));
+    field("Status", makeSelect(STATUS, f.status, "Status", function (v) { f.status = v; }));
+    form.appendChild(selects);
+    form.appendChild(el("label", { class: "field-label", text: "Observações" }));
+    var obs = el("textarea", { class: "obs-input", placeholder: "Detalhes, medidas, orçamento, quem vai fazer...", "aria-label": "Observações do reparo" });
+    obs.value = f.obs;
+    obs.addEventListener("input", function (e) { f.obs = e.target.value; });
+    form.appendChild(obs);
+    var actions = el("div", { class: "form-actions" });
+    var saveBtn = el("button", { class: "btn-primary", type: "button", text: f.editingId ? "Salvar alterações" : "Salvar reparo" });
+    saveBtn.addEventListener("click", saveReparo);
+    var cancelBtn = el("button", { class: "btn-text", type: "button", text: "Cancelar" });
+    cancelBtn.addEventListener("click", function () { reparoForm = null; renderContent(); });
+    actions.appendChild(saveBtn);
+    actions.appendChild(cancelBtn);
+    form.appendChild(actions);
+    return form;
+  }
+  function renderReparoCard(r) {
+    var card = el("div", { class: "reparo-card" + (r.status === "feito" ? " feito" : "") });
+    card.appendChild(el("h3", { class: "reparo-titulo", text: r.descricao }));
+    var meta = el("div", { class: "reparo-meta" });
+    meta.appendChild(el("span", { text: r.comodo }));
+    meta.appendChild(prioBadge(r.prioridade));
+    card.appendChild(meta);
+    if (r.obs) card.appendChild(el("p", { class: "reparo-obs", text: r.obs }));
+    var actions = el("div", { class: "card-actions" });
+    actions.appendChild(makeSelect(STATUS, r.status, "Status do reparo: " + r.descricao, function (v) {
+      r.status = v;
+      schedulePersist();
+      renderContent();
+    }));
+    var editBtn = el("button", { class: "btn-text", type: "button", text: "Editar" });
+    editBtn.addEventListener("click", function () {
+      reparoForm = { editingId: r.id, descricao: r.descricao, comodo: r.comodo, prioridade: r.prioridade, status: r.status, obs: r.obs || "" };
+      renderContent();
+    });
+    var delBtn = el("button", { class: "btn-text danger", type: "button", text: confirmDeleteId === r.id ? "Confirmar exclusão?" : "Excluir" });
+    delBtn.addEventListener("click", function () {
+      if (confirmDeleteId === r.id) {
+        confirmDeleteId = null;
+        removeById("reparos", r.id);
+      } else {
+        confirmDeleteId = r.id;
+        renderContent();
+      }
+    });
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+    card.appendChild(actions);
+    return card;
+  }
+  function renderReparos(container) {
+    var header = el("div", { class: "receitas-header" });
+    header.appendChild(el("p", { class: "section-hint", text: "Acompanhe o que precisa de conserto na casa." }));
+    if (!reparoForm) {
+      var newBtn = el("button", { class: "btn-primary", type: "button", text: "+ Novo reparo" });
+      newBtn.addEventListener("click", function () {
+        reparoForm = newReparoForm();
+        renderContent();
+        applyFocus("reparo-descricao");
+      });
+      header.appendChild(newBtn);
+    }
+    container.appendChild(header);
+    if (reparoForm) container.appendChild(renderReparoForm());
+    var total = state.reparos.length;
+    if (total === 0) {
+      if (!reparoForm) container.appendChild(el("p", { class: "empty-state", text: "Nenhum reparo registrado. Use \"+ Novo reparo\" para anotar o primeiro." }));
+      return;
+    }
+    var abertos = state.reparos.filter(function (r) { return r.status !== "feito"; }).length;
+    container.appendChild(el("div", { class: "compras-meta" }, [el("span", { text: abertos + (abertos === 1 ? " reparo em aberto" : " reparos em aberto") + " de " + total })]));
+    STATUS.forEach(function (s) {
+      var items = sortItems(state.reparos.filter(function (r) { return r.status === s.key; }), "__none");
+      if (!items.length) return;
+      var group = el("div", { class: "categoria-group" });
+      group.appendChild(el("div", { class: "categoria-title", text: s.label + " (" + items.length + ")" }));
+      var grid = el("div", { class: "reparos-grid" });
+      items.forEach(function (r) { grid.appendChild(renderReparoCard(r)); });
+      group.appendChild(grid);
+      container.appendChild(group);
+    });
+  }
+  // ----- importar receitas e dicas (soma aos dados, não substitui) -----
+  var importPending = null; // { arquivo, receitas: [{item, dup}], dicas: [{item, dup}] }
+  var importMsg = null;
+  function txt(v, max) { return typeof v === "string" ? v.trim().slice(0, max || 20000) : (typeof v === "number" ? String(v) : ""); }
+  function limparReceita(r) {
+    if (!r || typeof r !== "object") return null;
+    var nome = txt(r.nome || r.titulo, 200);
+    if (!nome) return null;
+    var ing = r.ingredientes;
+    if (typeof ing === "string") ing = ing.split(/\r?\n/);
+    ing = Array.isArray(ing) ? ing.map(function (i) { return txt(i, 300); }).filter(Boolean) : [];
+    var modo = r.modoPreparo || r.preparo || "";
+    if (Array.isArray(modo)) modo = modo.map(function (p, i) { return (i + 1) + ". " + txt(p); }).join("\n");
+    var link = txt(r.link || r.video, 1000);
+    var cat = "";
+    RECEITA_CATEGORIAS.forEach(function (c) { if (semAcento(c) === semAcento(txt(r.categoria, 100))) cat = c; });
+    return { nome: nome, ingredientes: ing, modoPreparo: txt(modo), link: link, fonte: txt(r.fonte, 300), categoria: cat };
+  }
+  function limparDica(d) {
+    if (!d || typeof d !== "object") return null;
+    var texto = txt(d.texto || d.dica, 5000);
+    var titulo = txt(d.titulo, 200) || texto.split("\n")[0].slice(0, 60);
+    if (!titulo) return null;
+    var cat = DICA_CATEGORIAS.indexOf(d.categoria) >= 0 ? d.categoria : "Outros";
+    return { titulo: titulo, categoria: cat, texto: texto, fonte: txt(d.fonte, 300) };
+  }
+  function prepararImportacao(parsed, arquivo) {
+    var fonte = parsed;
+    if (parsed && parsed.app === "casa-em-ordem" && parsed.dados) fonte = parsed.dados;
+    var recs = Array.isArray(fonte) ? fonte : (fonte && Array.isArray(fonte.receitas) ? fonte.receitas : []);
+    var dics = (fonte && !Array.isArray(fonte) && Array.isArray(fonte.dicas)) ? fonte.dicas : [];
+    var fics = (fonte && !Array.isArray(fonte) && Array.isArray(fonte.fichas)) ? fonte.fichas : [];
+    var nomesFicha = {};
+    state.fichas.forEach(function (f) { nomesFicha[semAcento(f.nome).trim()] = true; });
+    var fichas = [];
+    fics.forEach(function (f) {
+      if (!f || typeof f !== "object") return;
+      var nome = txt(f.nome, 200);
+      if (!nome) return;
+      var c = {
+        nome: nome,
+        funcao: f.funcao, objetivo: f.objetivo,
+        grupo: escolhaValida(FICHA_GRUPOS, f.grupo, "Corpo inteiro"),
+        nivel: escolhaValida(FICHA_NIVEIS, f.nivel, "Iniciante"),
+        duracaoMin: f.duracaoMin, duracao: typeof f.duracao === "string" ? f.duracao : "", met: f.met, dias: f.dias,
+        frequencia: txt(f.frequencia, 100), obs: txt(f.obs, 5000), fonte: txt(f.fonte, 500),
+        exercicios: Array.isArray(f.exercicios) ? f.exercicios.map(limparExercicio).filter(Boolean) : []
+      };
+      normalizarFicha(c);
+      var k = semAcento(nome).trim();
+      fichas.push({ item: c, dup: !!nomesFicha[k] });
+      nomesFicha[k] = true;
+    });
+    var nomes = {};
+    state.receitas.forEach(function (r) { nomes[semAcento(r.nome).trim()] = true; });
+    var titulos = {};
+    state.dicas.forEach(function (d) { titulos[semAcento(d.titulo).trim()] = true; });
+    var receitas = [], dicas = [];
+    recs.forEach(function (r) {
+      var c = limparReceita(r);
+      if (!c) return;
+      var k = semAcento(c.nome).trim();
+      receitas.push({ item: c, dup: !!nomes[k] });
+      nomes[k] = true;
+    });
+    dics.forEach(function (d) {
+      var c = limparDica(d);
+      if (!c) return;
+      var k = semAcento(c.titulo).trim();
+      dicas.push({ item: c, dup: !!titulos[k] });
+      titulos[k] = true;
+    });
+    if (!receitas.length && !dicas.length && !fichas.length) return null;
+    return { arquivo: arquivo, receitas: receitas, dicas: dicas, fichas: fichas };
+  }
+  function escolherArquivoImportacao() {
+    var input = el("input", { type: "file", accept: ".json,application/json" });
+    input.addEventListener("change", function () {
+      var file = input.files && input.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        importPending = null;
+        try {
+          importPending = prepararImportacao(JSON.parse(String(reader.result).replace(/^﻿/, "")), file.name);
+          importMsg = importPending ? null : { tipo: "erro", texto: "Não encontrei receitas, dicas nem fichas nesse arquivo." };
+        } catch (e) {
+          importMsg = { tipo: "erro", texto: "Esse arquivo não é um arquivo de importação válido." };
+        }
+        renderContent();
+      };
+      reader.onerror = function () { importMsg = { tipo: "erro", texto: "Não consegui ler o arquivo." }; renderContent(); };
+      reader.readAsText(file, "utf-8");
+    });
+    input.click();
+  }
+  function confirmarImportacao() {
+    var p = importPending;
+    if (!p) return;
+    var nr = 0, nd = 0, agora = new Date().toISOString();
+    p.receitas.forEach(function (x) {
+      if (x.dup) return;
+      var r = x.item; r.id = uid(); state.receitas.push(r); nr += 1;
+    });
+    p.dicas.forEach(function (x) {
+      if (x.dup) return;
+      var d = x.item; d.id = uid(); d.criadaEm = agora; state.dicas.push(d); nd += 1;
+    });
+    var nf = 0;
+    (p.fichas || []).forEach(function (x) {
+      if (x.dup) return;
+      var f = x.item; f.id = uid(); f.feitos = []; state.fichas.push(f); nf += 1;
+    });
+    importPending = null;
+    var partes = [];
+    if (nr) partes.push(nr + (nr === 1 ? " receita" : " receitas"));
+    if (nd) partes.push(nd + (nd === 1 ? " dica" : " dicas"));
+    if (nf) partes.push(nf + (nf === 1 ? " ficha de exercício" : " fichas de exercício"));
+    importMsg = { tipo: "ok", texto: partes.length ? "Importado: " + partes.join(", ") + "." : "Nada novo para importar: tudo já estava cadastrado." };
+    schedulePersist();
+    renderContent();
+  }
+  function renderImportacao(container) {
+    if (importMsg) {
+      var msg = el("p", { class: "backup-msg import-msg " + importMsg.tipo, text: importMsg.texto });
+      container.appendChild(msg);
+    }
+    var p = importPending;
+    if (!p) return;
+    var panel = el("div", { class: "form-panel import-panel" });
+    panel.appendChild(el("h3", { class: "reparo-titulo", text: "Importar de \"" + p.arquivo + "\"" }));
+    function bloco(lista, rotulo, nomeDe) {
+      if (!lista.length) return;
+      var novos = lista.filter(function (x) { return !x.dup; }).length;
+      panel.appendChild(el("div", { class: "field-label", text: rotulo + ": " + novos + " nova(s)" + (lista.length - novos ? ", " + (lista.length - novos) + " já cadastrada(s) (serão puladas)" : "") }));
+      var ul = el("ul");
+      lista.forEach(function (x) {
+        ul.appendChild(el("li", { class: x.dup ? "import-dup" : null, text: nomeDe(x.item) + (x.dup ? " (já existe)" : "") }));
+      });
+      panel.appendChild(ul);
+    }
+    bloco(p.receitas, "Receitas", function (r) { return r.nome + (r.fonte ? " · " + r.fonte : ""); });
+    bloco(p.dicas, "Dicas de culinária", function (d) { return d.titulo + " · " + d.categoria; });
+    bloco(p.fichas || [], "Fichas de exercício", function (f) { return f.nome + " · " + f.funcao + " · " + f.exercicios.length + " exercícios"; });
+    panel.appendChild(el("p", { class: "section-hint", text: "Nada do que você já tem será apagado ou alterado." }));
+    var actions = el("div", { class: "form-actions" });
+    var ok = el("button", { class: "btn-primary", type: "button", text: "Adicionar ao sistema" });
+    ok.addEventListener("click", confirmarImportacao);
+    var cancel = el("button", { class: "btn-text", type: "button", text: "Cancelar" });
+    cancel.addEventListener("click", function () { importPending = null; renderContent(); });
+    actions.appendChild(ok);
+    actions.appendChild(cancel);
+    panel.appendChild(actions);
+    container.appendChild(panel);
+  }
+  // ----- exercícios físicos (fichas) -----
+  function novoExercicio() { return { nome: "", series: "", repeticoes: "", descanso: "", como: "", link: "" }; }
+  function newFichaForm() {
+    var fn = FICHA_FUNCOES.indexOf(state.fichasFiltro) >= 0 ? state.fichasFiltro : FICHA_FUNCOES[0];
+    return { editingId: null, nome: "", funcao: fn, objetivo: "Os dois", grupo: FICHA_GRUPOS[0], nivel: FICHA_NIVEIS[0], duracaoMin: "", met: "", dias: [], frequencia: "", obs: "", fonte: "", exercicios: [novoExercicio()] };
+  }
+  function numPositivo(v, max) {
+    var n = parseFloat(String(v == null ? "" : v).replace(",", "."));
+    return (isFinite(n) && n > 0 && n <= max) ? Math.round(n * 10) / 10 : null;
+  }
+  // Deixa uma ficha (salva, importada ou antiga) no formato atual.
+  function normalizarFicha(f) {
+    if (FICHA_FUNCOES.indexOf(f.funcao) < 0) f.funcao = FICHA_ANTIGOS[f.objetivo] || "Mobilidade";
+    if (FICHA_OBJETIVOS.indexOf(f.objetivo) < 0) f.objetivo = "Os dois";
+    var dm = numPositivo(f.duracaoMin, 600);
+    if (dm === null && typeof f.duracao === "string") {
+      var m = f.duracao.match(/\d+/);
+      if (m) dm = numPositivo(m[0], 600);
+    }
+    f.duracaoMin = dm;
+    delete f.duracao;
+    f.met = numPositivo(f.met, 20);
+    var dias = Array.isArray(f.dias) ? f.dias : [];
+    f.dias = DIAS_SEMANA.filter(function (d) { return dias.indexOf(d) >= 0; });
+    if (!Array.isArray(f.feitos)) f.feitos = [];
+    if (!Array.isArray(f.exercicios)) f.exercicios = [];
+    return f;
+  }
+  function kcalFicha(fi) {
+    var up = ultimoPeso();
+    var peso = up && up.peso;
+    if (!peso || !fi.duracaoMin) return null;
+    var met = fi.met || MET_PADRAO[fi.funcao] || 3;
+    return Math.round(met * peso * fi.duracaoMin / 60);
+  }
+  function diasCurtos(dias) { return dias.map(function (d) { return d.slice(0, 3); }).join(", "); }
+  function inicioDaSemana() {
+    var d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return d;
+  }
+  function feitoHoje(fi) {
+    var ult = (fi.feitos || [])[fi.feitos.length - 1];
+    return !!ult && dataISO(new Date(ult)) === dataISO(new Date());
+  }
+  function limparExercicio(x) {
+    if (!x || typeof x !== "object") return null;
+    var nome = txt(x.nome, 200);
+    if (!nome) return null;
+    var link = txt(x.link || x.video, 1000);
+    if (link && !/^https?:\/\//i.test(link)) link = "";
+    return { nome: nome, series: txt(x.series, 40), repeticoes: txt(x.repeticoes || x.tempo, 60), descanso: txt(x.descanso, 40), como: txt(x.como || x.instrucoes, 3000), link: link };
+  }
+  function escolhaValida(lista, v, padrao) { return lista.indexOf(v) >= 0 ? v : padrao; }
+  function saveFicha() {
+    var f = fichaForm;
+    var nome = f.nome.trim();
+    if (!nome) { applyFocus("ficha-nome"); return; }
+    var dados = {
+      nome: nome, funcao: f.funcao, objetivo: f.objetivo, grupo: f.grupo, nivel: f.nivel,
+      duracaoMin: numPositivo(f.duracaoMin, 600), met: numPositivo(f.met, 20), dias: DIAS_SEMANA.filter(function (d) { return f.dias.indexOf(d) >= 0; }),
+      frequencia: f.frequencia.trim(), obs: f.obs.trim(), fonte: f.fonte.trim(),
+      exercicios: f.exercicios.map(limparExercicio).filter(Boolean)
+    };
+    if (f.editingId) {
+      var x = findById(state.fichas, f.editingId);
+      if (x) Object.keys(dados).forEach(function (k) { x[k] = dados[k]; });
+    } else {
+      dados.id = uid();
+      dados.feitos = [];
+      state.fichas.push(dados);
+    }
+    fichaForm = null;
+    schedulePersist();
+    renderContent();
+  }
+  function fmtData(iso) {
+    var d = new Date(iso);
+    return isNaN(d.getTime()) ? "" : pad2(d.getDate()) + "/" + pad2(d.getMonth() + 1) + "/" + d.getFullYear();
+  }
+  function doseTexto(x) {
+    var partes = [];
+    if (x.series && x.repeticoes) partes.push(x.series + " × " + x.repeticoes);
+    else if (x.series) partes.push(x.series + " séries");
+    else if (x.repeticoes) partes.push(x.repeticoes);
+    if (x.descanso) partes.push("descanso " + x.descanso);
+    return partes.join(" · ");
+  }
+  function renderFichaForm() {
+    var f = fichaForm;
+    var form = el("div", { class: "form-panel" });
+    form.appendChild(el("label", { class: "field-label", text: "Nome da ficha" }));
+    var nome = el("input", { type: "text", value: f.nome, placeholder: "Ex: Alongamento de pernas", "aria-label": "Nome da ficha", "data-focus": "ficha-nome" });
+    nome.addEventListener("input", function (e) { f.nome = e.target.value; });
+    form.appendChild(nome);
+    var selects = el("div", { class: "form-selects" });
+    function sel(label, lista, key) {
+      var d = el("div");
+      d.appendChild(el("label", { class: "field-label", text: label }));
+      d.appendChild(makeSelect(asOptions(lista), f[key], label, function (v) { f[key] = v; }));
+      selects.appendChild(d);
+    }
+    function campo(label, key, ph) {
+      var d = el("div");
+      d.appendChild(el("label", { class: "field-label", text: label }));
+      var i = el("input", { type: "text", value: f[key], placeholder: ph, "aria-label": label });
+      i.addEventListener("input", function (e) { f[key] = e.target.value; });
+      d.appendChild(i);
+      selects.appendChild(d);
+    }
+    sel("Função", FICHA_FUNCOES, "funcao");
+    sel("Objetivo", FICHA_OBJETIVOS, "objetivo");
+    sel("Parte do corpo", FICHA_GRUPOS, "grupo");
+    sel("Nível", FICHA_NIVEIS, "nivel");
+    campo("Duração (minutos)", "duracaoMin", "Ex: 40");
+    campo("Intensidade (MET, opcional)", "met", "Ex: 3,5");
+    campo("Frequência", "frequencia", "Ex: 2x por semana");
+    form.appendChild(selects);
+    form.appendChild(el("label", { class: "field-label", text: "Dias da semana" }));
+    var diasBox = el("div", { class: "dias-chips", role: "group", "aria-label": "Dias da semana" });
+    function desenharDias() {
+      diasBox.innerHTML = "";
+      DIAS_SEMANA.forEach(function (d) {
+        var on = f.dias.indexOf(d) >= 0;
+        var b = el("button", { class: "chip" + (on ? " active" : ""), type: "button", "aria-pressed": on ? "true" : "false", text: d });
+        b.addEventListener("click", function () {
+          if (on) f.dias = f.dias.filter(function (x) { return x !== d; }); else f.dias.push(d);
+          desenharDias();
+        });
+        diasBox.appendChild(b);
+      });
+    }
+    desenharDias();
+    form.appendChild(diasBox);
+    form.appendChild(el("label", { class: "field-label", text: "Exercícios" }));
+    var lista = el("div");
+    function desenharExercicios() {
+      lista.innerHTML = "";
+      f.exercicios.forEach(function (x, idx) {
+        var row = el("div", { class: "ex-form-row" });
+        function inp(key, ph, label, cls) {
+          var i = el("input", { type: "text", class: cls || null, value: x[key], placeholder: ph, "aria-label": label + " do exercício " + (idx + 1) });
+          i.addEventListener("input", function (e) { x[key] = e.target.value; });
+          row.appendChild(i);
+        }
+        inp("nome", (idx + 1) + ". Nome do exercício", "Nome", "ex-form-nome");
+        inp("series", "Séries (ex: 3)", "Séries");
+        inp("repeticoes", "Repetições ou tempo (ex: 12 ou 30 s)", "Repetições");
+        inp("descanso", "Descanso (ex: 60 s)", "Descanso");
+        var como = el("textarea", { placeholder: "Como fazer (postura, cuidados)", "aria-label": "Como fazer o exercício " + (idx + 1) });
+        como.value = x.como;
+        como.addEventListener("input", function (e) { x.como = e.target.value; });
+        row.appendChild(como);
+        inp("link", "Link de vídeo demonstrativo (opcional)", "Link", "ex-form-link");
+        var rm = el("button", { class: "btn-text danger", type: "button", text: "Remover exercício" });
+        rm.addEventListener("click", function () { f.exercicios.splice(idx, 1); desenharExercicios(); });
+        row.appendChild(rm);
+        lista.appendChild(row);
+      });
+    }
+    desenharExercicios();
+    form.appendChild(lista);
+    var addEx = el("button", { class: "btn-text", type: "button", text: "+ exercício" });
+    addEx.addEventListener("click", function () { f.exercicios.push(novoExercicio()); desenharExercicios(); });
+    form.appendChild(el("div", { class: "form-actions" }, [addEx]));
+    form.appendChild(el("label", { class: "field-label", text: "Observações" }));
+    var obs = el("textarea", { class: "obs-input", placeholder: "Aquecimento, cuidados, como progredir...", "aria-label": "Observações da ficha" });
+    obs.value = f.obs;
+    obs.addEventListener("input", function (e) { f.obs = e.target.value; });
+    form.appendChild(obs);
+    form.appendChild(el("label", { class: "field-label", text: "Fonte (opcional)" }));
+    var fonte = el("input", { type: "text", value: f.fonte, placeholder: "Site, profissional ou livro", "aria-label": "Fonte da ficha" });
+    fonte.addEventListener("input", function (e) { f.fonte = e.target.value; });
+    form.appendChild(fonte);
+    var actions = el("div", { class: "form-actions" });
+    var save = el("button", { class: "btn-primary", type: "button", text: f.editingId ? "Salvar alterações" : "Salvar ficha" });
+    save.addEventListener("click", saveFicha);
+    var cancel = el("button", { class: "btn-text", type: "button", text: "Cancelar" });
+    cancel.addEventListener("click", function () { fichaForm = null; renderContent(); });
+    actions.appendChild(save);
+    actions.appendChild(cancel);
+    form.appendChild(actions);
+    return form;
+  }
+  function editarFicha(fi) {
+    fichaForm = {
+      editingId: fi.id, nome: fi.nome, funcao: fi.funcao, objetivo: fi.objetivo, grupo: fi.grupo, nivel: fi.nivel,
+      duracaoMin: fi.duracaoMin ? String(fi.duracaoMin) : "", met: fi.met ? String(fi.met).replace(".", ",") : "", dias: (fi.dias || []).slice(),
+      frequencia: fi.frequencia || "", obs: fi.obs || "", fonte: fi.fonte || "",
+      exercicios: (fi.exercicios || []).map(function (x) { return Object.assign(novoExercicio(), x); })
+    };
+    if (!fichaForm.exercicios.length) fichaForm.exercicios.push(novoExercicio());
+    fichaViewId = null;
+    renderContent();
+    applyFocus("ficha-nome");
+  }
+  function botaoExcluirFicha(fi) {
+    var del = el("button", { class: "btn-text danger", type: "button", text: confirmDeleteId === fi.id ? "Confirmar exclusão?" : "Excluir" });
+    del.addEventListener("click", function () {
+      if (confirmDeleteId === fi.id) {
+        confirmDeleteId = null;
+        fichaViewId = null;
+        removeById("fichas", fi.id);
+      } else {
+        confirmDeleteId = fi.id;
+        renderContent();
+      }
+    });
+    return del;
+  }
+  function metaFicha(fi) {
+    var n = (fi.exercicios || []).length;
+    var partes = [fi.nivel, n + (n === 1 ? " exercício" : " exercícios")];
+    if (fi.duracaoMin) partes.push(fi.duracaoMin + " min");
+    if (fi.dias && fi.dias.length) partes.push(diasCurtos(fi.dias));
+    else if (fi.frequencia) partes.push(fi.frequencia);
+    var k = kcalFicha(fi);
+    if (k) partes.push("≈ " + k + " kcal");
+    return partes.join(" · ");
+  }
+  function ultimaVez(fi) {
+    var feitos = fi.feitos || [];
+    if (!feitos.length) return "Ainda não registrada";
+    return "Feita " + feitos.length + (feitos.length === 1 ? " vez" : " vezes") + " · última em " + fmtData(feitos[feitos.length - 1]);
+  }
+  function renderFichaDetail(container, fi) {
+    var wrap = el("div", { class: "receita-view" });
+    var back = el("button", { class: "btn-text receita-view-back", type: "button", text: "← Voltar para as fichas" });
+    back.addEventListener("click", function () { fichaViewId = null; renderContent(); });
+    wrap.appendChild(back);
+    wrap.appendChild(el("h3", { class: "receita-view-title", text: fi.nome }));
+    wrap.appendChild(el("div", { class: "receita-meta", text: fi.funcao + " · " + fi.grupo + " · " + metaFicha(fi) }));
+    var extra = ["Objetivo: " + fi.objetivo];
+    if (fi.dias && fi.dias.length && fi.frequencia) extra.push(fi.frequencia);
+    if (!kcalFicha(fi) && fi.duracaoMin) extra.push("informe seu peso no painel da aba para ver as calorias");
+    wrap.appendChild(el("div", { class: "dica-fonte", text: extra.join(" · ") }));
+    wrap.appendChild(el("div", { class: "dica-fonte", text: ultimaVez(fi) }));
+    if (fi.obs) wrap.appendChild(el("p", { class: "receita-view-modo", text: fi.obs }));
+    wrap.appendChild(el("div", { class: "field-label", text: "Exercícios" }));
+    var ul = el("ol", { class: "ex-list" });
+    (fi.exercicios || []).forEach(function (x, i) {
+      var li = el("li", { class: "ex-item" });
+      var head = el("div", { class: "ex-head" }, [
+        el("span", { class: "ex-num", text: (i + 1) + "." }),
+        el("span", { class: "ex-nome", text: x.nome })
+      ]);
+      var dose = doseTexto(x);
+      if (dose) head.appendChild(el("span", { class: "ex-dose", text: dose }));
+      li.appendChild(head);
+      if (x.como) li.appendChild(el("p", { class: "ex-como", text: x.como }));
+      if (x.link) li.appendChild(el("div", { class: "dica-fonte" }, [el("a", { href: x.link, target: "_blank", rel: "noopener noreferrer", text: "▶ Ver demonstração" })]));
+      ul.appendChild(li);
+    });
+    wrap.appendChild(ul);
+    if (fi.fonte) wrap.appendChild(renderFonte(fi.fonte));
+    var actions = el("div", { class: "receita-actions" });
+    var jaFeito = feitoHoje(fi);
+    var feito = el("button", { class: jaFeito ? "btn-text" : "btn-primary", type: "button", text: jaFeito ? "Desfazer o registro de hoje" : "✓ Fiz este treino hoje" });
+    feito.addEventListener("click", function () {
+      if (feitoHoje(fi)) fi.feitos.pop();
+      else fi.feitos.push(new Date().toISOString());
+      schedulePersist();
+      renderContent();
+    });
+    var editBtn = el("button", { class: "btn-text", type: "button", text: "Editar" });
+    editBtn.addEventListener("click", function () { editarFicha(fi); });
+    actions.appendChild(feito);
+    actions.appendChild(editBtn);
+    actions.appendChild(botaoExcluirFicha(fi));
+    wrap.appendChild(actions);
+    container.appendChild(wrap);
+  }
+  function renderFichaCard(fi) {
+    var card = el("div", { class: "reparo-card" });
+    var t = el("h3", { class: "reparo-titulo", text: fi.nome, title: "Abrir ficha", style: "cursor:pointer" });
+    t.addEventListener("click", function () { fichaViewId = fi.id; renderContent(); });
+    card.appendChild(t);
+    card.appendChild(el("div", { class: "reparo-meta" }, [el("span", { text: (state.fichasFiltro === "todas" ? fi.funcao + " · " : "") + metaFicha(fi) })]));
+    card.appendChild(el("div", { class: "dica-fonte", text: ultimaVez(fi) }));
+    var actions = el("div", { class: "card-actions" });
+    var ver = el("button", { class: "btn-text", type: "button", text: "Abrir" });
+    ver.addEventListener("click", function () { fichaViewId = fi.id; renderContent(); });
+    var editBtn = el("button", { class: "btn-text", type: "button", text: "Editar" });
+    editBtn.addEventListener("click", function () { editarFicha(fi); });
+    actions.appendChild(ver);
+    actions.appendChild(editBtn);
+    actions.appendChild(botaoExcluirFicha(fi));
+    card.appendChild(actions);
+    return card;
+  }
+  // Painel do topo: peso e meta (salvos só no arquivo de dados), plano da semana e progresso.
+  function renderPainelTreino(container) {
+    var perfil = state.treinoPerfil;
+    var up = ultimoPeso();
+    perfil = { peso: up ? up.peso : null, metaKcal: perfil.metaKcal, _ref: perfil };
+    var painel = el("div", { class: "treino-painel" });
+    painel.appendChild(el("h3", { text: "Sua semana de treino" }));
+    var planejados = [];
+    DIAS_SEMANA.forEach(function (d) {
+      state.fichas.forEach(function (fi) { if (fi.dias.indexOf(d) >= 0) planejados.push({ dia: d, fi: fi }); });
+    });
+    var kcalPlano = 0, minPlano = 0;
+    planejados.forEach(function (p) { kcalPlano += kcalFicha(p.fi) || 0; minPlano += p.fi.duracaoMin || 0; });
+    var meta = perfil.metaKcal || kcalPlano;
+    var desde = inicioDaSemana().getTime();
+    var treinos = 0, kcalFeito = 0, minFeito = 0;
+    state.fichas.forEach(function (fi) {
+      fi.feitos.forEach(function (iso) {
+        if (new Date(iso).getTime() < desde) return;
+        treinos += 1;
+        kcalFeito += kcalFicha(fi) || 0;
+        minFeito += fi.duracaoMin || 0;
+      });
+    });
+    var resumo = treinos + (treinos === 1 ? " treino" : " treinos") + " desde segunda · " + minFeito + " de 150 min recomendados";
+    if (perfil.peso) resumo += " · ≈ " + kcalFeito + " de " + meta + " kcal";
+    painel.appendChild(el("div", { class: "treino-resumo", text: resumo }));
+    var alvo = perfil.peso && meta ? meta : 150;
+    var feito = perfil.peso && meta ? kcalFeito : minFeito;
+    var pct = Math.min(100, Math.round(feito / alvo * 100));
+    painel.appendChild(el("div", { class: "meta-barra", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(pct), "aria-label": "Progresso da meta da semana" }, [el("span", { style: "width:" + pct + "%" })]));
+    if (planejados.length) {
+      var ul = el("ul", { class: "plano-semana" });
+      planejados.forEach(function (p) {
+        var k = kcalFicha(p.fi);
+        var b = el("button", { type: "button", text: p.fi.nome });
+        b.addEventListener("click", function () { fichaViewId = p.fi.id; renderContent(); });
+        var info = (p.fi.duracaoMin ? " · " + p.fi.duracaoMin + " min" : "") + (k ? " · ≈ " + k + " kcal" : "");
+        ul.appendChild(el("li", {}, [el("b", { text: p.dia }), b, info]));
+      });
+      painel.appendChild(ul);
+      painel.appendChild(el("div", { class: "dica-fonte", text: "Planejado: " + minPlano + " min por semana" + (perfil.peso ? " · ≈ " + kcalPlano + " kcal" : "") }));
+    }
+    var form = el("div", { class: "treino-perfil" });
+    function campoNum(label, key, max, ph) {
+      var i = el("input", { type: "text", inputmode: "decimal", value: perfil[key] ? String(perfil[key]).replace(".", ",") : "", placeholder: ph });
+      i.addEventListener("change", function (e) {
+        perfil._ref[key] = numPositivo(e.target.value, max);
+        schedulePersist();
+        renderContent();
+      });
+      form.appendChild(el("label", {}, [label, i]));
+    }
+    campoNum("Meta da semana (kcal)", "metaKcal", 20000, kcalPlano ? "Planejado: " + kcalPlano : "Ex: 1000");
+    painel.appendChild(form);
+    var irSaude = el("button", { class: "btn-text", type: "button", text: up ? "Atualizar peso na aba Saúde" : "Registrar peso na aba Saúde" });
+    irSaude.addEventListener("click", function () { activeTab = "saude"; state.activeTab = "saude"; schedulePersist(); renderAll(); });
+    painel.appendChild(el("div", { class: "dica-fonte" }, [
+      up ? "Peso usado: " + fmtNum(up.peso) + " kg (" + fmtDia(up.data) + "). " : "Sem peso registrado, as calorias não aparecem. ",
+      abaVisivel("saude") ? irSaude : null
+    ]));
+    painel.appendChild(el("div", { class: "dica-fonte", text: "Calorias estimadas pela intensidade (MET) × peso × tempo. São aproximações." }));
+    container.appendChild(painel);
+  }
+  function renderFichas(container) {
+    var vendo = fichaViewId ? findById(state.fichas, fichaViewId) : null;
+    if (fichaViewId && !vendo) fichaViewId = null;
+    if (vendo && !fichaForm) { renderFichaDetail(container, vendo); return; }
+    var header = el("div", { class: "receitas-header" });
+    header.appendChild(el("p", { class: "section-hint", text: "Fichas de mobilidade, condicionamento, força e respiração, com o plano da semana e as calorias estimadas." }));
+    if (!fichaForm) {
+      var acoes = el("div", { class: "header-actions" });
+      var imp = el("button", { class: "btn-text", type: "button", text: "Importar fichas" });
+      imp.addEventListener("click", escolherArquivoImportacao);
+      var nova = el("button", { class: "btn-primary", type: "button", text: "+ Nova ficha" });
+      nova.addEventListener("click", function () { fichaForm = newFichaForm(); renderContent(); applyFocus("ficha-nome"); });
+      acoes.appendChild(imp);
+      acoes.appendChild(nova);
+      header.appendChild(acoes);
+    }
+    container.appendChild(header);
+    container.appendChild(el("p", { class: "ficha-aviso", text: "Antes de começar um programa novo, confirme com seu médico ou profissional de educação física se ele é adequado para você. Dor leve (até 3 de 10) que passa em 24 h é aceitável; se for mais forte ou piorar no dia seguinte, reduza a carga ou a amplitude." }));
+    renderImportacao(container);
+    if (fichaForm) container.appendChild(renderFichaForm());
+    if (!state.fichas.length) {
+      if (!fichaForm) container.appendChild(el("p", { class: "empty-state", text: "Nenhuma ficha ainda. Use \"+ Nova ficha\" ou importe um arquivo de fichas." }));
+      return;
+    }
+    if (!fichaForm) renderPainelTreino(container);
+    var filtro = state.fichasFiltro;
+    var chips = el("div", { class: "room-chips", role: "group", "aria-label": "Filtrar fichas por função" });
+    function chip(key, label, count) {
+      var on = filtro === key;
+      var b = el("button", { class: "chip" + (on ? " active" : ""), type: "button", "aria-pressed": on ? "true" : "false" }, [label, el("span", { class: "chip-count", text: String(count) })]);
+      b.addEventListener("click", function () { state.fichasFiltro = key; schedulePersist(); renderContent(); });
+      chips.appendChild(b);
+    }
+    chip("todas", "Todas", state.fichas.length);
+    FICHA_FUNCOES.forEach(function (o) { chip(o, o, state.fichas.filter(function (fi) { return fi.funcao === o; }).length); });
+    container.appendChild(chips);
+    var itens = state.fichas.filter(function (fi) { return filtro === "todas" || fi.funcao === filtro; });
+    if (!itens.length) { container.appendChild(el("p", { class: "empty-state", text: "Nenhuma ficha deste tipo ainda." })); return; }
+    FICHA_GRUPOS.forEach(function (g) {
+      var doGrupo = itens.filter(function (fi) { return escolhaValida(FICHA_GRUPOS, fi.grupo, "Corpo inteiro") === g; });
+      if (!doGrupo.length) return;
+      doGrupo.sort(function (a, b) {
+        var oa = FICHA_FUNCOES.indexOf(a.funcao), ob = FICHA_FUNCOES.indexOf(b.funcao);
+        if (oa !== ob) return oa - ob;
+        return FICHA_NIVEIS.indexOf(a.nivel) - FICHA_NIVEIS.indexOf(b.nivel) || semAcento(a.nome).localeCompare(semAcento(b.nome));
+      });
+      var group = el("div", { class: "categoria-group" });
+      group.appendChild(el("div", { class: "categoria-title", text: g + " (" + doGrupo.length + ")" }));
+      var grid = el("div", { class: "reparos-grid" });
+      doGrupo.forEach(function (fi) { grid.appendChild(renderFichaCard(fi)); });
+      group.appendChild(grid);
+      container.appendChild(group);
+    });
+  }
+  // ----- saúde: peso e medidas corporais -----
+  function novaMedidaForm() {
+    var f = { editingId: null, data: dataISO(new Date()), obs: "" };
+    MEDIDA_CAMPOS.forEach(function (c) { f[c.k] = ""; });
+    return f;
+  }
+  function fmtDia(s) {
+    var p = String(s || "").split("-");
+    return p.length === 3 ? p[2] + "/" + p[1] + "/" + p[0] : "";
+  }
+  function fmtNum(n) { return String(n).replace(".", ","); }
+  function medidasOrdenadas() {
+    return state.medidas.slice().sort(function (a, b) { return a.data < b.data ? 1 : a.data > b.data ? -1 : 0; });
+  }
+  function ultimoPeso() {
+    var m = medidasOrdenadas().filter(function (x) { return x.peso; })[0];
+    return m ? { peso: m.peso, data: m.data } : null;
+  }
+  function saveMedida() {
+    var f = medidaForm;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.data)) { applyFocus("medida-data"); return; }
+    var dados = { data: f.data, obs: f.obs.trim() };
+    var algum = false;
+    MEDIDA_CAMPOS.forEach(function (c) { dados[c.k] = numPositivo(f[c.k], c.max); if (dados[c.k]) algum = true; });
+    if (!algum) { medidaErro = "Preencha pelo menos uma medida."; renderContent(); return; }
+    medidaErro = null;
+    if (f.editingId) {
+      var x = findById(state.medidas, f.editingId);
+      if (x) Object.keys(dados).forEach(function (k) { x[k] = dados[k]; });
+    } else {
+      dados.id = uid();
+      state.medidas.push(dados);
+    }
+    medidaForm = null;
+    schedulePersist();
+    renderContent();
+  }
+  function renderMedidaForm() {
+    var f = medidaForm;
+    var form = el("div", { class: "form-panel" });
+    var grid = el("div", { class: "form-selects" });
+    var dd = el("div");
+    dd.appendChild(el("label", { class: "field-label", text: "Data" }));
+    var data = el("input", { type: "date", value: f.data, "aria-label": "Data da medição", "data-focus": "medida-data" });
+    data.addEventListener("input", function (e) { f.data = e.target.value; });
+    dd.appendChild(data);
+    grid.appendChild(dd);
+    MEDIDA_CAMPOS.forEach(function (c) {
+      var d = el("div");
+      d.appendChild(el("label", { class: "field-label", text: c.l + " (" + c.u + ")" }));
+      var i = el("input", { type: "text", inputmode: "decimal", value: f[c.k], placeholder: c.ex, "aria-label": c.l + " em " + c.u });
+      i.addEventListener("input", function (e) { f[c.k] = e.target.value; });
+      d.appendChild(i);
+      grid.appendChild(d);
+    });
+    form.appendChild(grid);
+    form.appendChild(el("label", { class: "field-label", text: "Observações (opcional)" }));
+    var obs = el("textarea", { class: "obs-input", placeholder: "Ex: medido em jejum, de manhã", "aria-label": "Observações da medição" });
+    obs.value = f.obs;
+    obs.addEventListener("input", function (e) { f.obs = e.target.value; });
+    form.appendChild(obs);
+    if (medidaErro) form.appendChild(el("p", { class: "import-msg", text: medidaErro }));
+    var actions = el("div", { class: "form-actions" });
+    var save = el("button", { class: "btn-primary", type: "button", text: f.editingId ? "Salvar alterações" : "Salvar medição" });
+    save.addEventListener("click", saveMedida);
+    var cancel = el("button", { class: "btn-text", type: "button", text: "Cancelar" });
+    cancel.addEventListener("click", function () { medidaForm = null; medidaErro = null; renderContent(); });
+    actions.appendChild(save);
+    actions.appendChild(cancel);
+    form.appendChild(actions);
+    return form;
+  }
+  function textoVariacao(atual, anterior, unidade) {
+    if (!atual || !anterior) return "";
+    var d = Math.round((atual - anterior) * 10) / 10;
+    if (d === 0) return " (=)";
+    return " (" + (d > 0 ? "+" : "−") + fmtNum(Math.abs(d)) + " " + unidade + ")";
+  }
+  function renderSaude(container) {
+    var header = el("div", { class: "receitas-header" });
+    header.appendChild(el("p", { class: "section-hint", text: "Peso e medidas corporais ao longo do tempo. O último peso registrado é usado para estimar as calorias dos treinos." }));
+    if (!medidaForm) {
+      var nova = el("button", { class: "btn-primary", type: "button", text: "+ Nova medição" });
+      nova.addEventListener("click", function () { medidaForm = novaMedidaForm(); renderContent(); applyFocus("medida-data"); });
+      header.appendChild(nova);
+    }
+    container.appendChild(header);
+    if (medidaForm) container.appendChild(renderMedidaForm());
+    var lista = medidasOrdenadas();
+    if (!lista.length) {
+      if (!medidaForm) container.appendChild(el("p", { class: "empty-state", text: "Nenhuma medição ainda. Use \"+ Nova medição\". Dica: meça sempre no mesmo horário, de preferência de manhã, em jejum." }));
+      return;
+    }
+    var resumo = el("div", { class: "treino-painel" });
+    resumo.appendChild(el("h3", { text: "Resumo" }));
+    MEDIDA_CAMPOS.forEach(function (c) {
+      var comValor = lista.filter(function (m) { return m[c.k]; });
+      if (!comValor.length) return;
+      var atual = comValor[0], primeiro = comValor[comValor.length - 1];
+      var t = c.l + ": " + fmtNum(atual[c.k]) + " " + c.u + " em " + fmtDia(atual.data);
+      if (comValor.length > 1) t += textoVariacao(atual[c.k], primeiro[c.k], c.u).replace(")", " desde " + fmtDia(primeiro.data) + ")");
+      resumo.appendChild(el("div", { class: "treino-resumo", text: t }));
+    });
+    container.appendChild(resumo);
+    var group = el("div", { class: "categoria-group" });
+    group.appendChild(el("div", { class: "categoria-title", text: "Histórico (" + lista.length + ")" }));
+    var grid = el("div", { class: "reparos-grid" });
+    lista.forEach(function (m, i) {
+      var anterior = lista[i + 1];
+      var card = el("div", { class: "reparo-card" });
+      card.appendChild(el("h3", { class: "reparo-titulo", text: fmtDia(m.data) }));
+      var partes = [];
+      MEDIDA_CAMPOS.forEach(function (c) {
+        if (!m[c.k]) return;
+        partes.push(c.l + " " + fmtNum(m[c.k]) + " " + c.u + (anterior ? textoVariacao(m[c.k], anterior[c.k], c.u) : ""));
+      });
+      card.appendChild(el("p", { class: "dica-texto", text: partes.join("\n") }));
+      if (m.obs) card.appendChild(el("div", { class: "dica-fonte", text: m.obs }));
+      var actions = el("div", { class: "card-actions" });
+      var ed = el("button", { class: "btn-text", type: "button", text: "Editar" });
+      ed.addEventListener("click", function () {
+        medidaForm = { editingId: m.id, data: m.data, obs: m.obs || "" };
+        MEDIDA_CAMPOS.forEach(function (c) { medidaForm[c.k] = m[c.k] ? fmtNum(m[c.k]) : ""; });
+        renderContent();
+        applyFocus("medida-data");
+      });
+      var del = el("button", { class: "btn-text danger", type: "button", text: confirmDeleteId === m.id ? "Confirmar exclusão?" : "Excluir" });
+      del.addEventListener("click", function () {
+        if (confirmDeleteId === m.id) { confirmDeleteId = null; removeById("medidas", m.id); }
+        else { confirmDeleteId = m.id; renderContent(); }
+      });
+      actions.appendChild(ed);
+      actions.appendChild(del);
+      card.appendChild(actions);
+      grid.appendChild(card);
+    });
+    group.appendChild(grid);
+    container.appendChild(group);
+  }
+  // ----- dicas de culinária -----
+  function newDicaForm() {
+    var cat = state.dicasFiltro !== "todas" ? state.dicasFiltro : DICA_CATEGORIAS[0];
+    return { editingId: null, titulo: "", categoria: cat, texto: "", fonte: "" };
+  }
+  function saveDica() {
+    var titulo = dicaForm.titulo.trim();
+    var texto = dicaForm.texto.trim();
+    if (!titulo && !texto) return;
+    if (!titulo) titulo = texto.split("\n")[0].slice(0, 60);
+    var dados = { titulo: titulo, categoria: dicaForm.categoria, texto: texto, fonte: dicaForm.fonte.trim() };
+    if (dicaForm.editingId) {
+      var d = findById(state.dicas, dicaForm.editingId);
+      if (d) Object.keys(dados).forEach(function (k) { d[k] = dados[k]; });
+    } else {
+      dados.id = uid();
+      dados.criadaEm = new Date().toISOString();
+      state.dicas.push(dados);
+    }
+    dicaForm = null;
+    schedulePersist();
+    renderContent();
+  }
+  function semAcento(s) {
+    return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  }
+  function renderDicaForm() {
+    var f = dicaForm;
+    var form = el("div", { class: "form-panel" });
+    form.appendChild(el("label", { class: "field-label", text: "Título" }));
+    var tituloInput = el("input", { type: "text", value: f.titulo, placeholder: "Ex: Arroz soltinho", "aria-label": "Título da dica", "data-focus": "dica-titulo" });
+    tituloInput.addEventListener("input", function (e) { f.titulo = e.target.value; });
+    form.appendChild(tituloInput);
+    var selects = el("div", { class: "form-selects" });
+    var catDiv = el("div");
+    catDiv.appendChild(el("label", { class: "field-label", text: "Categoria" }));
+    catDiv.appendChild(makeSelect(asOptions(DICA_CATEGORIAS), f.categoria, "Categoria da dica", function (v) { f.categoria = v; }));
+    selects.appendChild(catDiv);
+    form.appendChild(selects);
+    form.appendChild(el("label", { class: "field-label", text: "Dica" }));
+    var texto = el("textarea", { class: "obs-input", placeholder: "Ex: Refogue o arroz no óleo antes de colocar a água fervendo.", "aria-label": "Texto da dica" });
+    texto.value = f.texto;
+    texto.addEventListener("input", function (e) { f.texto = e.target.value; });
+    form.appendChild(texto);
+    form.appendChild(el("label", { class: "field-label", text: "Fonte (opcional)" }));
+    var fonte = el("input", { type: "text", value: f.fonte, placeholder: "Livro, pessoa ou link do vídeo", "aria-label": "Fonte da dica" });
+    fonte.addEventListener("input", function (e) { f.fonte = e.target.value; });
+    form.appendChild(fonte);
+    var actions = el("div", { class: "form-actions" });
+    var saveBtn = el("button", { class: "btn-primary", type: "button", text: f.editingId ? "Salvar alterações" : "Salvar dica" });
+    saveBtn.addEventListener("click", saveDica);
+    var cancelBtn = el("button", { class: "btn-text", type: "button", text: "Cancelar" });
+    cancelBtn.addEventListener("click", function () { dicaForm = null; renderContent(); });
+    actions.appendChild(saveBtn);
+    actions.appendChild(cancelBtn);
+    form.appendChild(actions);
+    return form;
+  }
+  function renderFonte(fonte) {
+    var p = el("div", { class: "dica-fonte" });
+    if (/^https?:\/\/\S+$/i.test(fonte)) {
+      p.appendChild(document.createTextNode("Fonte: "));
+      p.appendChild(el("a", { href: fonte, target: "_blank", rel: "noopener noreferrer", text: fonte.replace(/^https?:\/\/(www\.)?/i, "").slice(0, 50) }));
+    } else {
+      p.textContent = "Fonte: " + fonte;
+    }
+    return p;
+  }
+  function renderDicaCard(d) {
+    var card = el("div", { class: "reparo-card" });
+    card.appendChild(el("h3", { class: "reparo-titulo", text: d.titulo }));
+    if (d.texto) card.appendChild(el("p", { class: "dica-texto", text: d.texto }));
+    if (d.fonte) card.appendChild(renderFonte(d.fonte));
+    var actions = el("div", { class: "card-actions" });
+    var editBtn = el("button", { class: "btn-text", type: "button", text: "Editar" });
+    editBtn.addEventListener("click", function () {
+      dicaForm = { editingId: d.id, titulo: d.titulo, categoria: d.categoria, texto: d.texto || "", fonte: d.fonte || "" };
+      renderContent();
+      applyFocus("dica-titulo");
+    });
+    var delBtn = el("button", { class: "btn-text danger", type: "button", text: confirmDeleteId === d.id ? "Confirmar exclusão?" : "Excluir" });
+    delBtn.addEventListener("click", function () {
+      if (confirmDeleteId === d.id) {
+        confirmDeleteId = null;
+        removeById("dicas", d.id);
+      } else {
+        confirmDeleteId = d.id;
+        renderContent();
+      }
+    });
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+    card.appendChild(actions);
+    return card;
+  }
+  function renderDicas(container) {
+    var header = el("div", { class: "receitas-header" });
+    header.appendChild(el("p", { class: "section-hint", text: "Truques e macetes da cozinha, organizados por assunto." }));
+    if (!dicaForm) {
+      var acoes = el("div", { class: "header-actions" });
+      var impBtn = el("button", { class: "btn-text", type: "button", text: "Importar dicas" });
+      impBtn.addEventListener("click", escolherArquivoImportacao);
+      var newBtn = el("button", { class: "btn-primary", type: "button", text: "+ Nova dica" });
+      newBtn.addEventListener("click", function () {
+        dicaForm = newDicaForm();
+        renderContent();
+        applyFocus("dica-titulo");
+      });
+      acoes.appendChild(impBtn);
+      acoes.appendChild(newBtn);
+      header.appendChild(acoes);
+    }
+    container.appendChild(header);
+    renderImportacao(container);
+    if (dicaForm) container.appendChild(renderDicaForm());
+    if (state.dicas.length === 0) {
+      if (!dicaForm) container.appendChild(el("p", { class: "empty-state", text: "Nenhuma dica ainda. Use \"+ Nova dica\" para guardar a primeira." }));
+      return;
+    }
+    var filtro = state.dicasFiltro;
+    var chips = el("div", { class: "room-chips", role: "group", "aria-label": "Filtrar por categoria" });
+    function addChip(key, label, count) {
+      var active = filtro === key;
+      var chip = el("button", { class: "chip" + (active ? " active" : ""), type: "button", "aria-pressed": active ? "true" : "false" }, [
+        label, el("span", { class: "chip-count", text: String(count) })
+      ]);
+      chip.addEventListener("click", function () { state.dicasFiltro = key; schedulePersist(); renderContent(); });
+      chips.appendChild(chip);
+    }
+    addChip("todas", "Todas", state.dicas.length);
+    DICA_CATEGORIAS.forEach(function (c) {
+      var n = state.dicas.filter(function (d) { return d.categoria === c; }).length;
+      if (n > 0 || filtro === c) addChip(c, c, n);
+    });
+    container.appendChild(chips);
+    var busca = el("input", { type: "text", class: "dicas-busca", value: dicaBusca, placeholder: "Buscar nas dicas...", "aria-label": "Buscar nas dicas", "data-focus": "dicas-busca" });
+    var lista = el("div");
+    busca.addEventListener("input", function (e) { dicaBusca = e.target.value; desenharLista(); });
+    container.appendChild(busca);
+    container.appendChild(lista);
+    function desenharLista() {
+      lista.innerHTML = "";
+      var termo = semAcento(dicaBusca.trim());
+      var itens = state.dicas.filter(function (d) {
+        if (filtro !== "todas" && d.categoria !== filtro) return false;
+        if (!termo) return true;
+        return semAcento(d.titulo + " " + d.texto + " " + (d.fonte || "") + " " + d.categoria).indexOf(termo) >= 0;
+      });
+      if (!itens.length) {
+        lista.appendChild(el("p", { class: "empty-state", text: termo ? "Nenhuma dica encontrada para \"" + dicaBusca.trim() + "\"." : "Nenhuma dica nesta categoria." }));
+        return;
+      }
+      itens.sort(function (a, b) { return semAcento(a.titulo).localeCompare(semAcento(b.titulo)); });
+      var grupos = filtro === "todas" ? DICA_CATEGORIAS : [filtro];
+      grupos.forEach(function (c) {
+        var doGrupo = itens.filter(function (d) { return d.categoria === c || (c === "Outros" && DICA_CATEGORIAS.indexOf(d.categoria) < 0); });
+        if (!doGrupo.length) return;
+        var group = el("div", { class: "categoria-group" });
+        if (filtro === "todas") group.appendChild(el("div", { class: "categoria-title", text: c + " (" + doGrupo.length + ")" }));
+        var grid = el("div", { class: "reparos-grid" });
+        doGrupo.forEach(function (d) { grid.appendChild(renderDicaCard(d)); });
+        group.appendChild(grid);
+        lista.appendChild(group);
+      });
+    }
+    desenharLista();
+  }
+  // ----- render: receitas -----
+  function renderReceitaForm() {
+    var form = el("div", { class: "receita-form" });
+    form.appendChild(el("label", { class: "field-label", text: "Nome" }));
+    var nomeInput = el("input", { type: "text", value: receitaForm.nome, "aria-label": "Nome da receita", placeholder: "Ex: Frango grelhado com arroz" });
+    nomeInput.addEventListener("input", function (e) { receitaForm.nome = e.target.value; });
+    form.appendChild(nomeInput);
+    form.appendChild(el("label", { class: "field-label", text: "Ingredientes" }));
+    var ingList = el("div", { class: "ingredientes-list" });
+    receitaForm.ingredientes.forEach(function (ing, idx) {
+      var row = el("div", { class: "ingrediente-row" });
+      row.appendChild(el("span", { class: "ingrediente-text", text: ing }));
+      var rm = el("button", { class: "item-remove", type: "button", text: "×", "aria-label": "Remover ingrediente" });
+      rm.addEventListener("click", function () { receitaForm.ingredientes.splice(idx, 1); renderContent(); });
+      row.appendChild(rm);
+      ingList.appendChild(row);
+    });
+    form.appendChild(ingList);
+    var addRow = el("div", { class: "meal-input-row" });
+    var ingInput = el("input", { type: "text", value: receitaForm.ingredienteDraft, placeholder: "Ex: 2 xícaras de arroz", "aria-label": "Novo ingrediente" });
+    ingInput.addEventListener("input", function (e) { receitaForm.ingredienteDraft = e.target.value; });
+    function commitIngrediente() {
+      var val = ingInput.value.trim();
+      if (!val) return;
+      receitaForm.ingredientes.push(val);
+      receitaForm.ingredienteDraft = "";
+      renderContent();
+    }
+    ingInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); commitIngrediente(); } });
+    var addIngBtn = el("button", { class: "btn-text", type: "button", text: "+ ingrediente" });
+    addIngBtn.addEventListener("click", commitIngrediente);
+    addRow.appendChild(ingInput);
+    addRow.appendChild(addIngBtn);
+    form.appendChild(addRow);
+    form.appendChild(el("label", { class: "field-label", text: "Modo de preparo" }));
+    var modoTextarea = el("textarea", { class: "modo-preparo", placeholder: "Descreva o passo a passo do preparo...", "aria-label": "Modo de preparo" });
+    modoTextarea.value = receitaForm.modoPreparo;
+    modoTextarea.addEventListener("input", function (e) { receitaForm.modoPreparo = e.target.value; });
+    form.appendChild(modoTextarea);
+    var extras = el("div", { class: "form-selects" });
+    function campoTexto(label, key, placeholder) {
+      var d = el("div");
+      d.appendChild(el("label", { class: "field-label", text: label }));
+      var inp = el("input", { type: "text", value: receitaForm[key] || "", placeholder: placeholder, "aria-label": label });
+      inp.addEventListener("input", function (e) { receitaForm[key] = e.target.value; });
+      d.appendChild(inp);
+      extras.appendChild(d);
+    }
+    var catDiv = el("div");
+    catDiv.appendChild(el("label", { class: "field-label", text: "Categoria" }));
+    catDiv.appendChild(makeSelect([{ key: "", label: "Sem categoria" }].concat(asOptions(RECEITA_CATEGORIAS)), receitaForm.categoria || "", "Categoria da receita", function (v) { receitaForm.categoria = v; }));
+    extras.appendChild(catDiv);
+    campoTexto("Link do vídeo (opcional)", "link", "Cole aqui o link do Instagram, Facebook, YouTube...");
+    campoTexto("Fonte (opcional)", "fonte", "Ex: Livro da vovó, p. 32");
+    form.appendChild(extras);
+    var actions = el("div", { class: "form-actions" });
+    var saveBtn = el("button", { class: "btn-primary", type: "button", text: receitaForm.editingId ? "Salvar alterações" : "Salvar receita" });
+    saveBtn.addEventListener("click", saveReceita);
+    var cancelBtn = el("button", { class: "btn-text", type: "button", text: "Cancelar" });
+    cancelBtn.addEventListener("click", function () { receitaForm = null; renderContent(); });
+    actions.appendChild(saveBtn);
+    actions.appendChild(cancelBtn);
+    form.appendChild(actions);
+    return form;
+  }
+  function renderReceitaCard(r) {
+    var card = el("div", { class: "receita-card" });
+    var titleEl = el("h3", { text: r.nome, title: "Ver receita completa" });
+    titleEl.addEventListener("click", function () { receitaViewId = r.id; renderContent(); });
+    card.appendChild(titleEl);
+    card.appendChild(el("div", { class: "receita-meta", text: r.ingredientes.length + (r.ingredientes.length === 1 ? " ingrediente" : " ingredientes") + (r.link ? " · tem vídeo" : "") + (r.fonte ? " · " + r.fonte : "") }));
+    if (r.modoPreparo) {
+      var preview = r.modoPreparo.length > 140 ? r.modoPreparo.slice(0, 140) + "…" : r.modoPreparo;
+      card.appendChild(el("p", { class: "receita-preview", text: preview }));
+    }
+    var actions = el("div", { class: "receita-actions" });
+    var viewBtn = el("button", { class: "btn-text", type: "button", text: "Ver" });
+    viewBtn.addEventListener("click", function () { receitaViewId = r.id; renderContent(); });
+    var editBtn = el("button", { class: "btn-text", type: "button", text: "Editar" });
+    editBtn.addEventListener("click", function () {
+      receitaForm = { editingId: r.id, nome: r.nome, ingredientes: r.ingredientes.slice(), ingredienteDraft: "", modoPreparo: r.modoPreparo, link: r.link || "", fonte: r.fonte || "", categoria: r.categoria || "" };
+      renderContent();
+    });
+    var sendBtn = el("button", { class: "btn-text", type: "button", text: "Enviar p/ compras" });
+    sendBtn.addEventListener("click", function () {
+      if (addComprasItems(r.ingredientes, "Outros")) {
+        sendBtn.textContent = "Enviado ✓";
+        setTimeout(function () { sendBtn.textContent = "Enviar p/ compras"; }, 1200);
+      }
+    });
+    var delBtn = el("button", { class: "btn-text danger", type: "button", text: confirmDeleteId === r.id ? "Confirmar exclusão?" : "Excluir" });
+    delBtn.addEventListener("click", function () {
+      if (confirmDeleteId === r.id) {
+        state.receitas = state.receitas.filter(function (x) { return x.id !== r.id; });
+        confirmDeleteId = null;
+        schedulePersist();
+        renderContent();
+      } else {
+        confirmDeleteId = r.id;
+        renderContent();
+      }
+    });
+    actions.appendChild(viewBtn);
+    actions.appendChild(editBtn);
+    actions.appendChild(sendBtn);
+    actions.appendChild(delBtn);
+    card.appendChild(actions);
+    return card;
+  }
+  function renderReceitaDetail(container, r) {
+    var wrap = el("div", { class: "receita-view" });
+    var backBtn = el("button", { class: "btn-text receita-view-back", type: "button", text: "← Voltar para receitas" });
+    backBtn.addEventListener("click", function () { receitaViewId = null; renderContent(); });
+    wrap.appendChild(backBtn);
+    wrap.appendChild(el("h3", { class: "receita-view-title", text: r.nome }));
+    wrap.appendChild(el("div", { class: "receita-meta", text: r.ingredientes.length + (r.ingredientes.length === 1 ? " ingrediente" : " ingredientes") }));
+    wrap.appendChild(el("div", { class: "field-label", text: "Ingredientes" }));
+    var ingList = el("ul", { class: "receita-view-ingredientes" });
+    r.ingredientes.forEach(function (ing) { ingList.appendChild(el("li", { text: ing })); });
+    wrap.appendChild(ingList);
+    if (r.modoPreparo) {
+      wrap.appendChild(el("div", { class: "field-label", text: "Modo de preparo" }));
+      wrap.appendChild(el("p", { class: "receita-view-modo", text: r.modoPreparo }));
+    }
+    if (r.link) {
+      if (/^https?:\/\//i.test(r.link)) {
+        wrap.appendChild(el("p", {}, [el("a", { class: "btn-primary receita-video", href: r.link, target: "_blank", rel: "noopener noreferrer", text: "▶ Abrir vídeo" })]));
+      } else {
+        wrap.appendChild(el("p", { class: "dica-fonte", text: "Vídeo: " + r.link }));
+      }
+    }
+    if (r.fonte) wrap.appendChild(el("p", { class: "dica-fonte", text: "Fonte: " + r.fonte }));
+    var actions = el("div", { class: "receita-actions" });
+    var editBtn = el("button", { class: "btn-text", type: "button", text: "Editar" });
+    editBtn.addEventListener("click", function () {
+      receitaForm = { editingId: r.id, nome: r.nome, ingredientes: r.ingredientes.slice(), ingredienteDraft: "", modoPreparo: r.modoPreparo, link: r.link || "", fonte: r.fonte || "", categoria: r.categoria || "" };
+      receitaViewId = null;
+      renderContent();
+    });
+    var sendBtn = el("button", { class: "btn-text", type: "button", text: "Enviar p/ compras" });
+    sendBtn.addEventListener("click", function () {
+      if (addComprasItems(r.ingredientes, "Outros")) {
+        sendBtn.textContent = "Enviado ✓";
+        setTimeout(function () { sendBtn.textContent = "Enviar p/ compras"; }, 1200);
+      }
+    });
+    var delBtn = el("button", { class: "btn-text danger", type: "button", text: confirmDeleteId === r.id ? "Confirmar exclusão?" : "Excluir" });
+    delBtn.addEventListener("click", function () {
+      if (confirmDeleteId === r.id) {
+        state.receitas = state.receitas.filter(function (x) { return x.id !== r.id; });
+        confirmDeleteId = null;
+        receitaViewId = null;
+        schedulePersist();
+        renderContent();
+      } else {
+        confirmDeleteId = r.id;
+        renderContent();
+      }
+    });
+    actions.appendChild(editBtn);
+    actions.appendChild(sendBtn);
+    actions.appendChild(delBtn);
+    wrap.appendChild(actions);
+    container.appendChild(wrap);
+  }
+  function renderReceitas(container) {
+    var viewingRecipe = receitaViewId ? findById(state.receitas, receitaViewId) : null;
+    if (receitaViewId && !viewingRecipe) receitaViewId = null;
+    if (viewingRecipe) {
+      renderReceitaDetail(container, viewingRecipe);
+      return;
+    }
+    var header = el("div", { class: "receitas-header" });
+    header.appendChild(el("p", { class: "section-hint", text: "Guarde suas receitas com ingredientes e modo de preparo." }));
+    if (!receitaForm) {
+      var acoes = el("div", { class: "header-actions" });
+      var impBtn = el("button", { class: "btn-text", type: "button", text: "Importar receitas" });
+      impBtn.addEventListener("click", escolherArquivoImportacao);
+      var newBtn = el("button", { class: "btn-primary", type: "button", text: "+ Nova receita" });
+      newBtn.addEventListener("click", function () {
+        var catAtual = RECEITA_CATEGORIAS.indexOf(state.receitasFiltro) >= 0 ? state.receitasFiltro : "";
+        receitaForm = { editingId: null, nome: "", ingredientes: [], ingredienteDraft: "", modoPreparo: "", link: "", fonte: "", categoria: catAtual };
+        renderContent();
+      });
+      acoes.appendChild(impBtn);
+      acoes.appendChild(newBtn);
+      header.appendChild(acoes);
+    }
+    container.appendChild(header);
+    renderImportacao(container);
+    if (receitaForm) container.appendChild(renderReceitaForm());
+    if (state.receitas.length === 0 && !receitaForm) {
+      container.appendChild(el("p", { class: "empty-state", text: "Nenhuma receita ainda. Adicione a primeira!" }));
+      return;
+    }
+    if (state.receitas.length === 0) return;
+    var filtro = state.receitasFiltro;
+    function catDe(r) { return RECEITA_CATEGORIAS.indexOf(r.categoria) >= 0 ? r.categoria : ""; }
+    var chips = el("div", { class: "room-chips", role: "group", "aria-label": "Filtrar receitas por categoria" });
+    function addChip(key, label, count) {
+      var active = filtro === key;
+      var chip = el("button", { class: "chip" + (active ? " active" : ""), type: "button", "aria-pressed": active ? "true" : "false" }, [
+        label, el("span", { class: "chip-count", text: String(count) })
+      ]);
+      chip.addEventListener("click", function () { state.receitasFiltro = key; schedulePersist(); renderContent(); });
+      chips.appendChild(chip);
+    }
+    addChip("todas", "Todas", state.receitas.length);
+    RECEITA_CATEGORIAS.forEach(function (c) {
+      addChip(c, c, state.receitas.filter(function (r) { return catDe(r) === c; }).length);
+    });
+    var semCat = state.receitas.filter(function (r) { return !catDe(r); }).length;
+    if (semCat > 0 || filtro === "") addChip("", "Sem categoria", semCat);
+    container.appendChild(chips);
+    var grupos = filtro === "todas" ? RECEITA_CATEGORIAS.concat([""]) : [filtro];
+    var algum = false;
+    grupos.forEach(function (c) {
+      var itens = state.receitas.filter(function (r) { return catDe(r) === c; });
+      if (!itens.length) return;
+      algum = true;
+      itens.sort(function (a, b) { return semAcento(a.nome).localeCompare(semAcento(b.nome)); });
+      var group = el("div", { class: "categoria-group" });
+      if (filtro === "todas") group.appendChild(el("div", { class: "categoria-title", text: (c || "Sem categoria") + " (" + itens.length + ")" }));
+      var list = el("div", { class: "receitas-list" });
+      itens.forEach(function (r) { list.appendChild(renderReceitaCard(r)); });
+      group.appendChild(list);
+      container.appendChild(group);
+    });
+    if (!algum) container.appendChild(el("p", { class: "empty-state", text: "Nenhuma receita nesta categoria ainda." }));
+  }
+  function renderComingSoon(container, label) {
+    container.appendChild(el("div", { class: "coming-soon" }, [
+      el("p", { class: "empty-state", text: label + " ainda não foi construído. Em breve!" })
+    ]));
+  }
+  // ----- render: dispatch -----
+  function renderContent() {
+    var content = document.getElementById("content");
+    content.innerHTML = "";
+    renderSetup(content);
+    if (ONLINE && online.status !== "pronto") return;
+    if (ONLINE && !abaVisivel(activeTab)) return;
+    renderAba(content);
+    if (ONLINE && SECOES[activeTab] && !podeEditar(activeTab)) aplicarSomenteLeitura(content);
+  }
+  function renderAba(content) {
+    if (activeTab === "cardapio") renderCardapio(content);
+    else if (activeTab === "receitas") renderReceitas(content);
+    else if (activeTab === "dicas") renderDicas(content);
+    else if (activeTab === "compras") renderCompras(content);
+    else if (activeTab === "tarefas") renderTarefas(content);
+    else if (activeTab === "reparos") renderReparos(content);
+    else if (activeTab === "exercicios") renderFichas(content);
+    else if (activeTab === "saude") renderSaude(content);
+    else if (activeTab === "backup") renderBackup(content);
+    else {
+      var tab = TABS.filter(function (t) { return t.key === activeTab; })[0];
+      renderComingSoon(content, tab ? tab.label : "");
+    }
+  }
+  function renderAll() {
+    renderNav();
+    renderContent();
+  }
+  // ----- modo online (Supabase) -----
+  // Quando a página é aberta pela internet (https), os dados vêm do Supabase, com login.
+  // Aberta como arquivo do computador, tudo continua como antes (arquivo de dados local).
+  // A URL e a chave "publishable" são públicas por natureza; quem protege os dados são as
+  // regras de acesso (RLS) do banco. Nunca coloque aqui a chave secret/service_role.
+  var SUPABASE_URL = "https://jtzhpcunaxczoscsjgur.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_2aLgJ-vF7gUq2BtgyrJrvg__6EmGx6C";
+  var SUPABASE_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js";
+  var UI_KEY = "casa-em-ordem-ui-v1";
+  // Cada aba online vira um registro na tabela "secoes". O Financeiro nunca sobe.
+  var SECOES = {
+    cardapio: ["cardapio"], receitas: ["receitas"], dicas: ["dicas"], compras: ["compras", "casa"],
+    tarefas: ["tarefas"], reparos: ["reparos"], exercicios: ["fichas", "treinoPerfil"], saude: ["medidas"]
+  };
+  var sb = null;
+  var online = { status: "carregando", email: "", dono: false, acessos: {}, salvo: {}, msg: null, erroSalvar: false };
+  var onlineChain = Promise.resolve();
+  function podeVer(secao) { return online.dono || Object.prototype.hasOwnProperty.call(online.acessos, secao); }
+  function podeEditar(secao) { return !ONLINE || online.dono || online.acessos[secao] === true; }
+  function abaVisivel(key) {
+    if (!ONLINE) return true;
+    if (key === "financeiro") return false;
+    if (key === "backup") return online.dono;
+    return SECOES[key] ? podeVer(key) : false;
+  }
+  function secaoJSON(s) {
+    var o = {};
+    SECOES[s].forEach(function (k) { o[k] = state[k]; });
+    return JSON.stringify(o);
+  }
+  function aplicarSecao(s, dados) {
+    if (!dados || typeof dados !== "object") return;
+    SECOES[s].forEach(function (k) { if (dados[k] !== undefined) state[k] = JSON.parse(JSON.stringify(dados[k])); });
+  }
+  function salvarUI() {
+    try {
+      var ui = {};
+      UI_FIELDS.forEach(function (k) { ui[k] = state[k]; });
+      localStorage.setItem(UI_KEY, JSON.stringify(ui));
+    } catch (e) {}
+  }
+  function lerUI() {
+    try { return JSON.parse(localStorage.getItem(UI_KEY) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function marcarSalvo() {
+    Object.keys(SECOES).forEach(function (s) { online.salvo[s] = secaoJSON(s); });
+  }
+  function salvarOnline() {
+    if (online.status !== "pronto") return;
+    var mudou = Object.keys(SECOES).filter(function (s) { return podeEditar(s) && secaoJSON(s) !== online.salvo[s]; });
+    if (!mudou.length) { setSaveStatus("online"); return; }
+    onlineChain = onlineChain.then(function () {
+      return Promise.all(mudou.map(function (s) {
+        var j = secaoJSON(s);
+        return sb.from("secoes").upsert({ secao: s, dados: JSON.parse(j) }).then(function (r) {
+          if (r.error) throw r.error;
+          online.salvo[s] = j;
+        });
+      }));
+    }).then(function () {
+      online.erroSalvar = false;
+      setSaveStatus("online");
+    }).catch(function () {
+      online.erroSalvar = true;
+      setSaveStatus("error");
+    });
+  }
+  function editandoAgora() {
+    var a = document.activeElement;
+    return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && document.getElementById("content").contains(a));
+  }
+  // Traz do banco as abas que mudaram; não mexe numa aba com alteração local ainda não enviada.
+  function receberSecao(s, dados) {
+    if (!SECOES[s]) return false;
+    if (secaoJSON(s) !== online.salvo[s]) return false;
+    var antes = online.salvo[s];
+    aplicarSecao(s, dados);
+    state = normalizeState(state);
+    online.salvo[s] = secaoJSON(s);
+    return online.salvo[s] !== antes;
+  }
+  function recarregarOnline() {
+    if (online.status !== "pronto") return;
+    sb.from("secoes").select("secao,dados").then(function (r) {
+      if (r.error || !r.data) return;
+      var mudou = false;
+      r.data.forEach(function (row) { if (receberSecao(row.secao, row.dados)) mudou = true; });
+      if (mudou && !editandoAgora()) renderAll();
+    });
+  }
+  function carregarOnline(session) {
+    online.email = (session.user && session.user.email || "").toLowerCase();
+    online.status = "carregando";
+    renderAll();
+    Promise.all([
+      sb.from("donos").select("email"),
+      sb.from("acessos").select("email,secao,pode_editar"),
+      sb.from("secoes").select("secao,dados")
+    ]).then(function (rs) {
+      rs.forEach(function (r) { if (r.error) throw r.error; });
+      online.dono = rs[0].data.some(function (d) { return String(d.email).toLowerCase() === online.email; });
+      online.acessos = {};
+      rs[1].data.forEach(function (a) {
+        if (String(a.email).toLowerCase() === online.email) online.acessos[a.secao] = !!a.pode_editar;
+      });
+      if (!online.dono && !Object.keys(online.acessos).length) { online.status = "sem-acesso"; renderAll(); return; }
+      var base = lerUI();
+      state = normalizeState(base);
+      rs[2].data.forEach(function (row) { if (SECOES[row.secao]) aplicarSecao(row.secao, row.dados); });
+      state = normalizeState(state);
+      marcarSalvo();
+      if (!abaVisivel(state.activeTab)) {
+        state.activeTab = TABS.filter(function (t) { return abaVisivel(t.key); })[0].key;
+      }
+      activeTab = state.activeTab;
+      online.status = "pronto";
+      setSaveStatus(online.dono || Object.keys(online.acessos).some(function (k) { return online.acessos[k]; }) ? "online" : "leitura");
+      renderAll();
+      sb.channel("secoes-mudancas")
+        .on("postgres_changes", { event: "*", schema: "public", table: "secoes" }, function (p) {
+          if (p.new && p.new.secao && receberSecao(p.new.secao, p.new.dados) && !editandoAgora()) renderAll();
+        })
+        .subscribe();
+    }).catch(function () {
+      online.status = "erro";
+      online.msg = "Não foi possível carregar os dados. Verifique a internet e recarregue a página.";
+      renderAll();
+    });
+  }
+  function enviarLink(email, botao) {
+    email = (email || "").trim().toLowerCase();
+    online.digitado = email;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { online.msg = "Digite um e-mail válido."; renderAll(); return; }
+    botao.disabled = true;
+    botao.textContent = "Enviando…";
+    sb.auth.signInWithOtp({ email: email, options: { shouldCreateUser: false, emailRedirectTo: location.origin + location.pathname } })
+      .then(function (r) {
+        if (r.error) {
+          online.msg = /signup|not allowed|not found/i.test(r.error.message || "")
+            ? "Este e-mail não tem acesso. Peça à dona do sistema para liberar."
+            : /rate|seconds|many/i.test(r.error.message || "")
+              ? "Muitos pedidos seguidos. Espere alguns minutos e tente de novo."
+              : "Não foi possível enviar o link. Tente de novo em instantes.";
+        } else {
+          online.status = "link-enviado";
+          online.email = email;
+          online.msg = null;
+        }
+        renderAll();
+      });
+  }
+  function sair() {
+    sb.auth.signOut().then(function () {
+      try { localStorage.removeItem(UI_KEY); } catch (e) {}
+      location.reload();
+    });
+  }
+  function renderOnlineSetup(container) {
+    if (online.status === "pronto") {
+      var barra = el("div", { class: "online-barra" });
+      var papel = online.dono ? "" : (podeEditar(activeTab) ? "" : " · nesta aba você pode ver, mas não editar");
+      barra.appendChild(el("span", { text: "Conectado como " + online.email + papel }));
+      var s = el("button", { class: "btn-text", type: "button", text: "Sair" });
+      s.addEventListener("click", sair);
+      barra.appendChild(s);
+      container.appendChild(barra);
+      return;
+    }
+    var p = el("div", { class: "setup-panel" });
+    if (online.status === "carregando") {
+      p.appendChild(el("p", { text: "Carregando…" }));
+    } else if (online.status === "login") {
+      p.appendChild(el("h3", { text: "Entrar no Casa em Ordem" }));
+      p.appendChild(el("p", { text: "Digite seu e-mail. Vamos enviar um link de acesso — é só abrir o e-mail neste aparelho e tocar no link. Não precisa de senha." }));
+      var row = el("div", { class: "backup-row" });
+      setSaveStatus("fora");
+      var inp = el("input", { type: "text", inputmode: "email", class: "login-email", value: online.digitado || "", placeholder: "seu-email@exemplo.com", "aria-label": "Seu e-mail", autocomplete: "email" });
+      var b = el("button", { class: "btn-primary", type: "button", text: "Receber link de acesso" });
+      b.addEventListener("click", function () { enviarLink(inp.value, b); });
+      inp.addEventListener("keydown", function (e) { if (e.key === "Enter") enviarLink(inp.value, b); });
+      row.appendChild(inp);
+      row.appendChild(b);
+      p.appendChild(row);
+    } else if (online.status === "link-enviado") {
+      p.appendChild(el("h3", { text: "Confira seu e-mail" }));
+      p.appendChild(el("p", { text: "Enviamos um link de acesso para " + online.email + ". Abra o e-mail neste aparelho e toque no link (veja também a caixa de spam)." }));
+      var outro = el("button", { class: "btn-text", type: "button", text: "Usar outro e-mail" });
+      outro.addEventListener("click", function () { online.status = "login"; renderAll(); });
+      p.appendChild(outro);
+    } else if (online.status === "sem-acesso") {
+      p.appendChild(el("h3", { text: "Sem acesso ainda" }));
+      p.appendChild(el("p", { text: "O e-mail " + online.email + " entrou, mas ainda não tem nenhuma aba liberada. Peça à dona do sistema para liberar." }));
+      var s2 = el("button", { class: "btn-text", type: "button", text: "Sair" });
+      s2.addEventListener("click", sair);
+      p.appendChild(s2);
+    } else {
+      p.appendChild(el("h3", { text: "Algo deu errado" }));
+    }
+    if (online.msg) p.appendChild(el("p", { class: "backup-msg erro", text: online.msg }));
+    container.appendChild(p);
+  }
+  // Em abas só de leitura, tira os botões de alterar e trava os campos.
+  var BOTAO_EDITA = /^(\+|×|✓|Editar|Excluir|Confirmar|Importar|Salvar|Adicionar|Remover|Desmarcar|Desfazer|Enviar|Cancelar|Limpar|Marcar)/;
+  function aplicarSomenteLeitura(content) {
+    content.querySelectorAll("button").forEach(function (b) {
+      if (b.closest(".online-barra")) return;
+      if (BOTAO_EDITA.test(b.textContent.trim()) || b.classList.contains("danger") || b.classList.contains("btn-add-compra")) b.remove();
+    });
+    content.querySelectorAll("input, textarea, select").forEach(function (i) {
+      if (i.classList.contains("dicas-busca")) return;
+      i.disabled = true;
+    });
+  }
+  function bootOnline() {
+    setSaveStatus("carregando");
+    renderAll();
+    var s = document.createElement("script");
+    s.src = SUPABASE_JS;
+    s.onerror = function () {
+      online.status = "erro";
+      online.msg = "Não foi possível carregar o sistema. Verifique a internet e recarregue a página.";
+      renderAll();
+    };
+    s.onload = function () {
+      sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      var iniciado = false;
+      sb.auth.onAuthStateChange(function (evento, session) {
+        if (session && !iniciado) {
+          iniciado = true;
+          setTimeout(function () { carregarOnline(session); }, 0);
+        } else if (!session && evento === "SIGNED_OUT") {
+          iniciado = false;
+        }
+      });
+      sb.auth.getSession().then(function (r) {
+        if (!r.data.session && !iniciado) { online.status = "login"; renderAll(); }
+      });
+      document.addEventListener("visibilitychange", function () { if (!document.hidden) recarregarOnline(); });
+    };
+    document.head.appendChild(s);
+  }
+  // ----- boot -----
+  if (ONLINE) {
+    bootOnline();
+    return;
+  }
+  // 1) mostra na hora a cópia guardada neste navegador (se houver)
+  try {
+    var local = localStorage.getItem(LS_KEY);
+    if (local) {
+      var parsedLocal = JSON.parse(local);
+      if (extrairDados(parsedLocal)) {
+        state = normalizeState(parsedLocal);
+        activeTab = state.activeTab;
+      }
+    }
+  } catch (e) {}
+  setSaveStatus("local");
+  renderAll();
+  // 2) se já existe um arquivo de dados ligado, carrega dele (ele é a fonte oficial)
+  if (FS_OK) {
+    idbGet("dados").then(function (h) {
+      if (!h) return;
+      fileHandle = h;
+      return h.queryPermission({ mode: "readwrite" }).then(function (p) {
+        if (p === "granted") return conectar(h, true);
+        fileStatus = "needs-permission";
+        renderAll();
+      });
+    }).catch(function () {
+      if (fileHandle && fileStatus !== "connected") { fileStatus = "needs-permission"; renderAll(); }
+    });
+  }
+})();
+</script></body></html>
