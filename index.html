@@ -2273,16 +2273,17 @@
     if (vendo && !fichaForm) { renderFichaDetail(container, vendo); return; }
     var header = el("div", { class: "receitas-header" });
     header.appendChild(el("p", { class: "section-hint", text: "Fichas de mobilidade, condicionamento, força e respiração, com o plano da semana e as calorias estimadas." }));
+    // O Importar fica sempre visível; só o "+ Nova" some enquanto o formulário está aberto.
+    var acoes = el("div", { class: "header-actions" });
+    var imp = el("button", { class: "btn-text", type: "button", text: "Importar fichas" });
+    imp.addEventListener("click", escolherArquivoImportacao);
+    acoes.appendChild(imp);
     if (!fichaForm) {
-      var acoes = el("div", { class: "header-actions" });
-      var imp = el("button", { class: "btn-text", type: "button", text: "Importar fichas" });
-      imp.addEventListener("click", escolherArquivoImportacao);
       var nova = el("button", { class: "btn-primary", type: "button", text: "+ Nova ficha" });
       nova.addEventListener("click", function () { fichaForm = newFichaForm(); renderContent(); applyFocus("ficha-nome"); });
-      acoes.appendChild(imp);
       acoes.appendChild(nova);
-      header.appendChild(acoes);
     }
+    header.appendChild(acoes);
     container.appendChild(header);
     container.appendChild(el("p", { class: "ficha-aviso", text: "Antes de começar um programa novo, confirme com seu médico ou profissional de educação física se ele é adequado para você. Dor leve (até 3 de 10) que passa em 24 h é aceitável; se for mais forte ou piorar no dia seguinte, reduza a carga ou a amplitude." }));
     renderImportacao(container);
@@ -2562,20 +2563,20 @@
   function renderDicas(container) {
     var header = el("div", { class: "receitas-header" });
     header.appendChild(el("p", { class: "section-hint", text: "Truques e macetes da cozinha, organizados por assunto." }));
+    var acoes = el("div", { class: "header-actions" });
+    var impBtn = el("button", { class: "btn-text", type: "button", text: "Importar dicas" });
+    impBtn.addEventListener("click", escolherArquivoImportacao);
+    acoes.appendChild(impBtn);
     if (!dicaForm) {
-      var acoes = el("div", { class: "header-actions" });
-      var impBtn = el("button", { class: "btn-text", type: "button", text: "Importar dicas" });
-      impBtn.addEventListener("click", escolherArquivoImportacao);
       var newBtn = el("button", { class: "btn-primary", type: "button", text: "+ Nova dica" });
       newBtn.addEventListener("click", function () {
         dicaForm = newDicaForm();
         renderContent();
         applyFocus("dica-titulo");
       });
-      acoes.appendChild(impBtn);
       acoes.appendChild(newBtn);
-      header.appendChild(acoes);
     }
+    header.appendChild(acoes);
     container.appendChild(header);
     renderImportacao(container);
     if (dicaForm) container.appendChild(renderDicaForm());
@@ -2957,20 +2958,20 @@
     }
     var header = el("div", { class: "receitas-header" });
     header.appendChild(el("p", { class: "section-hint", text: modoVisitante() ? "Receitas compartilhadas. Tem uma receita boa? Envie sua sugestão." : "Guarde suas receitas com ingredientes e modo de preparo." }));
+    var acoes = el("div", { class: "header-actions" });
+    var impBtn = el("button", { class: "btn-text", type: "button", text: "Importar receitas" });
+    impBtn.addEventListener("click", escolherArquivoImportacao);
+    acoes.appendChild(impBtn);
     if (!receitaForm) {
-      var acoes = el("div", { class: "header-actions" });
-      var impBtn = el("button", { class: "btn-text", type: "button", text: "Importar receitas" });
-      impBtn.addEventListener("click", escolherArquivoImportacao);
       var newBtn = el("button", { class: "btn-primary", type: "button", text: "+ Nova receita" });
       newBtn.addEventListener("click", function () {
         var catAtual = RECEITA_CATEGORIAS.indexOf(state.receitasFiltro) >= 0 ? state.receitasFiltro : "";
         receitaForm = { editingId: null, nome: "", ingredientes: [], ingredienteDraft: "", modoPreparo: "", link: "", fonte: "", categoria: catAtual };
         renderContent();
       });
-      acoes.appendChild(impBtn);
       acoes.appendChild(newBtn);
-      header.appendChild(acoes);
     }
+    header.appendChild(acoes);
     container.appendChild(header);
     if (modoVisitante()) renderSugestaoForm(container);
     if (ONLINE && online.status === "pronto" && podeEditar("receitas")) renderSugestoesRecebidas(container);
