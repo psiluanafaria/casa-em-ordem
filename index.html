@@ -160,7 +160,7 @@
     border-radius: 12px;
   }
   /* Buttons & inputs shared */
-  input[type="text"], select, textarea {
+  input[type="text"], input[type="email"], input[type="password"], select, textarea {
     font: inherit;
     color: var(--text);
     background: var(--surface);
@@ -168,7 +168,7 @@
     border-radius: 8px;
     padding: 9px 11px;
   }
-  input[type="text"]:focus, select:focus, textarea:focus {
+  input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, select:focus, textarea:focus {
     outline: 2px solid var(--focus);
     outline-offset: 1px;
   }
@@ -570,6 +570,8 @@
   .dias-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
   .online-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; font-size: 12px; color: var(--text-muted); margin-bottom: 12px; overflow-wrap: anywhere; }
   .setup-panel .login-email { flex: 1 1 220px; min-width: 0; }
+  .login-form { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+  .login-form .login-email { flex: 1 1 200px; }
   .selo-vis { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--border); color: var(--text-muted); }
   .selo-vis.publica { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
   .pote-mel { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
@@ -3376,6 +3378,85 @@
         renderAll();
       });
   }
+  // ----- login com e-mail e senha -----
+  function emailValido(e) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e); }
+  function entrarComSenha(email, senha, botao) {
+    email = (email || "").trim().toLowerCase();
+    online.digitado = email;
+    online.aviso = null;
+    if (!emailValido(email)) { online.msg = "Digite um e-mail válido."; renderAll(); return; }
+    if (!senha) { online.msg = "Digite sua senha."; renderAll(); return; }
+    botao.disabled = true;
+    botao.textContent = "Entrando…";
+    sb.auth.signInWithPassword({ email: email, password: senha }).then(function (r) {
+      if (r.error) {
+        var m = r.error.message || "";
+        online.msg = /invalid login|credentials/i.test(m)
+          ? "E-mail ou senha incorretos. Se ainda não criou sua senha, toque em \"Primeiro acesso ou esqueci a senha\"."
+          : /confirm/i.test(m)
+            ? "Este e-mail ainda não foi confirmado. Use \"Primeiro acesso ou esqueci a senha\"."
+            : /rate|many|seconds/i.test(m)
+              ? "Muitas tentativas seguidas. Espere alguns minutos e tente de novo."
+              : "Não foi possível entrar. Tente de novo em instantes. (Detalhe técnico: " + (m || r.error.status || "sem detalhe") + ")";
+        renderAll();
+      }
+      // Se deu certo, o onAuthStateChange carrega os dados.
+    });
+  }
+  function enviarCriarSenha(email, botao) {
+    email = (email || "").trim().toLowerCase();
+    online.digitado = email;
+    online.aviso = null;
+    if (!emailValido(email)) { online.msg = "Digite seu e-mail no campo acima e toque de novo em \"Primeiro acesso ou esqueci a senha\"."; renderAll(); return; }
+    botao.disabled = true;
+    botao.textContent = "Enviando…";
+    sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname }).then(function (r) {
+      if (r.error) {
+        online.msg = /rate|many|seconds/i.test(r.error.message || "")
+          ? "Muitos pedidos seguidos. Espere alguns minutos e tente de novo."
+          : "Não foi possível enviar o e-mail. Tente de novo em instantes. (Detalhe técnico: " + (r.error.message || r.error.status || "sem detalhe") + ")";
+      } else {
+        online.status = "senha-enviada";
+        online.email = email;
+        online.msg = null;
+      }
+      renderAll();
+    });
+  }
+  function salvarNovaSenha(s1, s2, botao) {
+    online.aviso = null;
+    if (!s1 || s1.length < 8) { online.msg = "A senha precisa ter pelo menos 8 caracteres."; renderAll(); return; }
+    if (s1 !== s2) { online.msg = "As duas senhas não são iguais. Digite de novo."; renderAll(); return; }
+    botao.disabled = true;
+    botao.textContent = "Salvando…";
+    sb.auth.updateUser({ password: s1 }).then(function (r) {
+      if (r.error) {
+        var m = r.error.message || "";
+        online.msg = /different|same/i.test(m)
+          ? "Essa já é a sua senha atual. Escolha outra."
+          : /weak|short|characters/i.test(m)
+            ? "Senha fraca demais. Use pelo menos 8 caracteres, misturando letras e números."
+            : /session|expired|jwt/i.test(m)
+              ? "O link expirou. Peça um novo em \"Primeiro acesso ou esqueci a senha\"."
+              : "Não foi possível salvar a senha. (Detalhe técnico: " + (m || r.error.status || "sem detalhe") + ")";
+        renderAll();
+        return;
+      }
+      online.msg = null;
+      online.aviso = "Senha salva! Nas próximas vezes, entre com seu e-mail e essa senha.";
+      online.recuperando = false;
+      if (online.voltarPronto) {
+        online.voltarPronto = false;
+        online.status = "pronto";
+        renderAll();
+      } else {
+        sb.auth.getSession().then(function (rs) {
+          if (rs.data.session) carregarOnline(rs.data.session);
+          else { online.status = "login"; renderAll(); }
+        });
+      }
+    });
+  }
   function sair() {
     sb.auth.signOut().then(function () {
       try { localStorage.removeItem(UI_KEY); } catch (e) {}
@@ -3396,30 +3477,81 @@
       var barra = el("div", { class: "online-barra" });
       var papel = online.dono ? "" : (podeEditar(activeTab) ? "" : " · nesta aba você pode ver, mas não editar");
       barra.appendChild(el("span", { text: "Conectado como " + online.email + papel }));
+      var acoesBarra = el("span", { class: "backup-row" });
+      var ts = el("button", { class: "btn-text", type: "button", text: "Criar ou trocar senha" });
+      ts.addEventListener("click", function () {
+        salvarOnline();
+        online.voltarPronto = true;
+        online.msg = null;
+        online.aviso = null;
+        online.status = "senha-nova";
+        renderAll();
+      });
       var s = el("button", { class: "btn-text", type: "button", text: "Sair" });
       s.addEventListener("click", sair);
-      barra.appendChild(s);
+      acoesBarra.appendChild(ts);
+      acoesBarra.appendChild(s);
+      barra.appendChild(acoesBarra);
       container.appendChild(barra);
+      if (online.aviso) {
+        container.appendChild(el("p", { class: "backup-msg ok", text: online.aviso }));
+        if (!online.avisoTimer) online.avisoTimer = setTimeout(function () { online.aviso = null; online.avisoTimer = null; if (!editandoAgora()) renderContent(); }, 8000);
+      }
       return;
     }
     var p = el("div", { class: "setup-panel" });
     if (online.status === "carregando") {
       p.appendChild(el("p", { text: "Carregando…" }));
     } else if (online.status === "login") {
-      p.appendChild(el("h3", { text: "Entrar no Casa em Ordem" }));
-      p.appendChild(el("p", { text: "Digite seu e-mail. Vamos enviar um link de acesso — é só abrir o e-mail neste aparelho e tocar no link. Não precisa de senha." }));
-      var row = el("div", { class: "backup-row" });
       setSaveStatus("fora");
-      var inp = el("input", { type: "text", inputmode: "email", class: "login-email", value: online.digitado || "", placeholder: "seu-email@exemplo.com", "aria-label": "Seu e-mail", autocomplete: "email" });
-      var b = el("button", { class: "btn-primary", type: "button", text: "Receber link de acesso" });
-      b.addEventListener("click", function () { enviarLink(inp.value, b); });
-      inp.addEventListener("keydown", function (e) { if (e.key === "Enter") enviarLink(inp.value, b); });
-      row.appendChild(inp);
-      row.appendChild(b);
-      p.appendChild(row);
+      p.appendChild(el("h3", { text: "Entrar no Casa em Ordem" }));
+      p.appendChild(el("p", { text: "Digite seu e-mail e sua senha. O navegador pode guardar a senha para as próximas vezes." }));
+      // Um <form> de verdade, para o navegador oferecer guardar e preencher a senha.
+      var form = el("form", { class: "login-form", autocomplete: "on" });
+      var inp = el("input", { type: "email", name: "email", class: "login-email", value: online.digitado || "", placeholder: "seu-email@exemplo.com", "aria-label": "Seu e-mail", autocomplete: "username" });
+      var pw = el("input", { type: "password", name: "password", class: "login-email", placeholder: "Sua senha", "aria-label": "Sua senha", autocomplete: "current-password" });
+      var b = el("button", { class: "btn-primary", type: "submit", text: "Entrar" });
+      form.addEventListener("submit", function (e) { e.preventDefault(); entrarComSenha(inp.value, pw.value, b); });
+      form.appendChild(inp);
+      form.appendChild(pw);
+      form.appendChild(b);
+      p.appendChild(form);
+      var outras = el("div", { class: "backup-row" });
+      var esqueci = el("button", { class: "btn-text", type: "button", text: "Primeiro acesso ou esqueci a senha" });
+      esqueci.addEventListener("click", function () { enviarCriarSenha(inp.value, esqueci); });
+      var porLink = el("button", { class: "btn-text", type: "button", text: "Entrar com link por e-mail" });
+      porLink.addEventListener("click", function () { enviarLink(inp.value, porLink); });
+      outras.appendChild(esqueci);
+      outras.appendChild(porLink);
+      p.appendChild(outras);
       var voltar = el("button", { class: "btn-text", type: "button", text: "← Ver receitas públicas" });
       voltar.addEventListener("click", function () { online.msg = null; carregarPublico(); });
       p.appendChild(voltar);
+    } else if (online.status === "senha-enviada") {
+      p.appendChild(el("h3", { text: "Confira seu e-mail" }));
+      p.appendChild(el("p", { text: "Se " + online.email + " tiver acesso ao sistema, enviamos um link para criar a senha. Abra o e-mail neste aparelho e toque no link (veja também a caixa de spam)." }));
+      var volta2 = el("button", { class: "btn-text", type: "button", text: "← Voltar para o login" });
+      volta2.addEventListener("click", function () { online.status = "login"; online.msg = null; renderAll(); });
+      p.appendChild(volta2);
+    } else if (online.status === "senha-nova") {
+      p.appendChild(el("h3", { text: online.voltarPronto ? "Criar ou trocar senha" : "Crie sua senha" }));
+      p.appendChild(el("p", { text: "Use pelo menos 8 caracteres. Depois, entre com " + online.email + " e essa senha." }));
+      var fs = el("form", { class: "login-form", autocomplete: "on" });
+      // Campo escondido com o e-mail: ajuda o navegador a guardar a senha no usuário certo.
+      fs.appendChild(el("input", { type: "email", name: "email", value: online.email, autocomplete: "username", hidden: "hidden", readonly: "readonly", tabindex: "-1", "aria-hidden": "true" }));
+      var n1 = el("input", { type: "password", name: "new-password", class: "login-email", placeholder: "Nova senha", "aria-label": "Nova senha", autocomplete: "new-password" });
+      var n2 = el("input", { type: "password", name: "confirm-password", class: "login-email", placeholder: "Repita a nova senha", "aria-label": "Repita a nova senha", autocomplete: "new-password" });
+      var bs = el("button", { class: "btn-primary", type: "submit", text: "Salvar senha" });
+      fs.addEventListener("submit", function (e) { e.preventDefault(); salvarNovaSenha(n1.value, n2.value, bs); });
+      fs.appendChild(n1);
+      fs.appendChild(n2);
+      fs.appendChild(bs);
+      p.appendChild(fs);
+      if (online.voltarPronto) {
+        var canc = el("button", { class: "btn-text", type: "button", text: "Cancelar" });
+        canc.addEventListener("click", function () { online.voltarPronto = false; online.msg = null; online.status = "pronto"; renderAll(); });
+        p.appendChild(canc);
+      }
     } else if (online.status === "link-enviado") {
       p.appendChild(el("h3", { text: "Confira seu e-mail" }));
       p.appendChild(el("p", { text: "Enviamos um link de acesso para " + online.email + ". Abra o e-mail neste aparelho e toque no link (veja também a caixa de spam)." }));
@@ -3440,6 +3572,8 @@
     }
     if (online.msg) p.appendChild(el("p", { class: "backup-msg erro", text: online.msg }));
     container.appendChild(p);
+    if (online.status === "login") { var foco = p.querySelector(online.digitado ? "input[type=password]" : "input[type=email]"); if (foco) foco.focus(); }
+    if (online.status === "senha-nova") { var f2 = p.querySelector("input[type=password]"); if (f2) f2.focus(); }
   }
   // Em abas só de leitura, tira os botões de alterar e trava os campos.
   var BOTAO_EDITA = /^(\+|×|✓|Editar|Excluir|Confirmar|Importar|Salvar|Adicionar|Remover|Desmarcar|Desfazer|Enviar|Cancelar|Limpar|Marcar|Tornar|Aprovar|Recusar)/;
@@ -3464,9 +3598,20 @@
       renderAll();
     };
     s.onload = function () {
+      // Link de "criar/trocar senha": o Supabase volta com type=recovery no endereço.
+      online.recuperando = /type=recovery/.test(location.hash + location.search);
       sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       var iniciado = false;
       sb.auth.onAuthStateChange(function (evento, session) {
+        if (session && (evento === "PASSWORD_RECOVERY" || online.recuperando)) {
+          iniciado = true;
+          online.recuperando = true;
+          online.email = (session.user && session.user.email || "").toLowerCase();
+          online.msg = null;
+          online.status = "senha-nova";
+          setTimeout(renderAll, 0);
+          return;
+        }
         if (session && !iniciado) {
           iniciado = true;
           setTimeout(function () { carregarOnline(session); }, 0);
