@@ -3328,6 +3328,8 @@
       rs[2].data.forEach(function (row) { if (SECOES[row.secao]) aplicarSecao(row.secao, row.dados); });
       state = normalizeState(state);
       marcarSalvo();
+      // Se o aviso de "criar senha" chegou enquanto carregava, mostra a tela de senha antes.
+      if (online.recuperando) { online.status = "senha-nova"; renderAll(); return; }
       online.status = "pronto";
       if (!abaVisivel(state.activeTab)) {
         state.activeTab = TABS.filter(function (t) { return abaVisivel(t.key); })[0].key;
@@ -3416,12 +3418,30 @@
           ? "Muitos pedidos seguidos. Espere alguns minutos e tente de novo."
           : "Não foi possível enviar o e-mail. Tente de novo em instantes. (Detalhe técnico: " + (r.error.message || r.error.status || "sem detalhe") + ")";
       } else {
+        // Lembra do pedido: quando a pessoa voltar pelo link, mostra a tela de criar senha.
+        try { localStorage.setItem(PEDIDO_SENHA_KEY, JSON.stringify({ email: email, t: Date.now() })); } catch (e) {}
         online.status = "senha-enviada";
         online.email = email;
         online.msg = null;
       }
       renderAll();
     });
+  }
+  var PEDIDO_SENHA_KEY = "casa-em-ordem-criar-senha";
+  function pedidoCriarSenha(email) {
+    try {
+      var p = JSON.parse(localStorage.getItem(PEDIDO_SENHA_KEY) || "null");
+      return !!p && p.email === email && Date.now() - p.t < 24 * 3600 * 1000;
+    } catch (e) { return false; }
+  }
+  function esquecerPedidoSenha() { try { localStorage.removeItem(PEDIDO_SENHA_KEY); } catch (e) {} }
+  function mostrarCriarSenha(session) {
+    online.recuperando = true;
+    online.voltarPronto = false;
+    online.email = (session.user && session.user.email || "").toLowerCase();
+    online.msg = null;
+    online.status = "senha-nova";
+    renderAll();
   }
   function salvarNovaSenha(s1, s2, botao) {
     online.aviso = null;
@@ -3445,6 +3465,7 @@
       online.msg = null;
       online.aviso = "Senha salva! Nas próximas vezes, entre com seu e-mail e essa senha.";
       online.recuperando = false;
+      esquecerPedidoSenha();
       if (online.voltarPronto) {
         online.voltarPronto = false;
         online.status = "pronto";
@@ -3551,6 +3572,18 @@
         var canc = el("button", { class: "btn-text", type: "button", text: "Cancelar" });
         canc.addEventListener("click", function () { online.voltarPronto = false; online.msg = null; online.status = "pronto"; renderAll(); });
         p.appendChild(canc);
+      } else {
+        var pular = el("button", { class: "btn-text", type: "button", text: "Agora não (criar depois)" });
+        pular.addEventListener("click", function () {
+          online.recuperando = false;
+          online.msg = null;
+          esquecerPedidoSenha();
+          sb.auth.getSession().then(function (rs) {
+            if (rs.data.session) carregarOnline(rs.data.session);
+            else { online.status = "login"; renderAll(); }
+          });
+        });
+        p.appendChild(pular);
       }
     } else if (online.status === "link-enviado") {
       p.appendChild(el("h3", { text: "Confira seu e-mail" }));
@@ -3603,13 +3636,11 @@
       sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       var iniciado = false;
       sb.auth.onAuthStateChange(function (evento, session) {
-        if (session && (evento === "PASSWORD_RECOVERY" || online.recuperando)) {
+        var emailSessao = session && session.user && (session.user.email || "").toLowerCase();
+        if (session && (evento === "PASSWORD_RECOVERY" || online.recuperando || pedidoCriarSenha(emailSessao))) {
           iniciado = true;
           online.recuperando = true;
-          online.email = (session.user && session.user.email || "").toLowerCase();
-          online.msg = null;
-          online.status = "senha-nova";
-          setTimeout(renderAll, 0);
+          setTimeout(function () { mostrarCriarSenha(session); }, 0);
           return;
         }
         if (session && !iniciado) {
