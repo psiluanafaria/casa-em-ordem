@@ -562,6 +562,10 @@
   .dias-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
   .online-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; font-size: 12px; color: var(--text-muted); margin-bottom: 12px; overflow-wrap: anywhere; }
   .setup-panel .login-email { flex: 1 1 220px; min-width: 0; }
+  .selo-vis { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--border); color: var(--text-muted); }
+  .selo-vis.publica { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .pote-mel { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+  .livre { margin-top: 14px; }
   .import-msg { margin-top: 12px; }
   .header-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .import-panel ul { margin: 8px 0 0; padding-left: 20px; font-size: 13px; max-height: 220px; overflow: auto; }
@@ -873,6 +877,7 @@
       text.textContent = status === "saving" ? "Salvando…" : status === "online" ? "Salvo online"
         : status === "leitura" ? "Somente leitura" : status === "carregando" ? "Conectando…"
         : status === "fora" ? "Faça login para continuar"
+        : status === "visitante" ? "Modo visitante"
         : "Erro ao salvar online. Verifique a internet.";
       return;
     }
@@ -1415,7 +1420,7 @@
   function renderNav() {
     var nav = document.getElementById("tabs-nav");
     nav.innerHTML = "";
-    if (ONLINE && online.status !== "pronto") return;
+    if (ONLINE && online.status !== "pronto" && online.status !== "publico") return;
     TABS.forEach(function (t) {
       if (!abaVisivel(t.key)) return;
       var classes = "tab-btn" + (activeTab === t.key ? " active" : "") + (t.soon ? " soon" : "");
@@ -2528,7 +2533,11 @@
     card.appendChild(el("h3", { class: "reparo-titulo", text: d.titulo }));
     if (d.texto) card.appendChild(el("p", { class: "dica-texto", text: d.texto }));
     if (d.fonte) card.appendChild(renderFonte(d.fonte));
+    var selo = seloVisibilidade(d);
+    if (selo) card.appendChild(el("div", {}, [selo]));
     var actions = el("div", { class: "card-actions" });
+    var visD = botaoVisibilidade(d, "dicas");
+    if (visD) actions.appendChild(visD);
     var editBtn = el("button", { class: "btn-text", type: "button", text: "Editar" });
     editBtn.addEventListener("click", function () {
       dicaForm = { editingId: d.id, titulo: d.titulo, categoria: d.categoria, texto: d.texto || "", fonte: d.fonte || "" };
@@ -2571,7 +2580,7 @@
     renderImportacao(container);
     if (dicaForm) container.appendChild(renderDicaForm());
     if (state.dicas.length === 0) {
-      if (!dicaForm) container.appendChild(el("p", { class: "empty-state", text: "Nenhuma dica ainda. Use \"+ Nova dica\" para guardar a primeira." }));
+      if (!dicaForm) container.appendChild(el("p", { class: "empty-state", text: modoVisitante() ? "Nenhuma dica pública ainda." : "Nenhuma dica ainda. Use \"+ Nova dica\" para guardar a primeira." }));
       return;
     }
     var filtro = state.dicasFiltro;
@@ -2621,6 +2630,154 @@
       });
     }
     desenharLista();
+  }
+  // ----- visibilidade pública (site sem login) -----
+  // Sem escolha explícita, item com "Fonte" (ex.: livro) fica só para quem tem login.
+  function ehPublica(x) { return typeof x.publica === "boolean" ? x.publica : !x.fonte; }
+  function modoVisitante() { return ONLINE && online.status === "publico"; }
+  function seloVisibilidade(x) {
+    if (!ONLINE || modoVisitante()) return null;
+    return el("span", { class: "selo-vis" + (ehPublica(x) ? " publica" : ""), text: ehPublica(x) ? "Pública" : "Só com login" });
+  }
+  function botaoVisibilidade(x, secao) {
+    if (!ONLINE || modoVisitante() || !podeEditar(secao)) return null;
+    var b = el("button", { class: "btn-text", type: "button", text: ehPublica(x) ? "Tornar só com login" : "Tornar pública" });
+    b.addEventListener("click", function () { x.publica = !ehPublica(x); schedulePersist(); renderContent(); });
+    return b;
+  }
+  function dadosPublicos(s) {
+    if (s === "receitas") {
+      return state.receitas.filter(ehPublica).map(function (r) {
+        return { id: r.id, nome: r.nome, ingredientes: r.ingredientes, modoPreparo: r.modoPreparo, link: r.link || "", fonte: r.fonte || "", categoria: r.categoria || "" };
+      });
+    }
+    return state.dicas.filter(ehPublica).map(function (d) {
+      return { id: d.id, titulo: d.titulo, categoria: d.categoria, texto: d.texto || "", fonte: d.fonte || "" };
+    });
+  }
+  // ----- sugestões de receitas (visitantes enviam, a equipe aprova) -----
+  var sugestaoForm = null;
+  var sugestaoMsg = null;
+  function novaSugestao() { return { nome: "", categoria: "", ingredientes: "", modoPreparo: "", link: "", autor: "", site: "" }; }
+  function enviarSugestao(botao) {
+    var f = sugestaoForm;
+    if (f.site) { sugestaoForm = null; sugestaoMsg = { tipo: "ok", texto: "Obrigado!" }; renderContent(); return; } // robô
+    var limpa = limparReceita({ nome: f.nome, categoria: f.categoria, ingredientes: f.ingredientes, modoPreparo: f.modoPreparo, link: f.link });
+    if (!limpa || (!limpa.ingredientes.length && !limpa.modoPreparo)) {
+      sugestaoMsg = { tipo: "erro", texto: "Preencha o nome e os ingredientes ou o modo de preparo." };
+      renderContent();
+      return;
+    }
+    if (limpa.link && !/^https?:\/\//i.test(limpa.link)) limpa.link = "";
+    delete limpa.fonte;
+    botao.disabled = true;
+    botao.textContent = "Enviando…";
+    sb.from("sugestoes").insert({ tipo: "receita", dados: limpa, autor: txt(f.autor, 100) || null }).then(function (r) {
+      if (r.error) {
+        sugestaoMsg = { tipo: "erro", texto: /limite|cheia/i.test(r.error.message || "")
+          ? "Recebemos muitas sugestões agora. Tente de novo mais tarde."
+          : "Não foi possível enviar. Tente de novo em instantes." };
+      } else {
+        sugestaoForm = null;
+        sugestaoMsg = { tipo: "ok", texto: "Obrigado! Sua receita foi enviada e aparece aqui depois de aprovada." };
+      }
+      renderContent();
+    });
+  }
+  function renderSugestaoForm(container) {
+    var box = el("div", { class: "livre" });
+    if (!sugestaoForm) {
+      var abrir = el("button", { class: "btn-primary", type: "button", text: "Sugerir uma receita" });
+      abrir.addEventListener("click", function () { sugestaoForm = novaSugestao(); sugestaoMsg = null; renderContent(); applyFocus("sug-nome"); });
+      box.appendChild(abrir);
+      if (sugestaoMsg) box.appendChild(el("p", { class: "backup-msg " + sugestaoMsg.tipo, text: sugestaoMsg.texto }));
+      container.appendChild(box);
+      return;
+    }
+    var f = sugestaoForm;
+    var form = el("div", { class: "form-panel" });
+    form.appendChild(el("h3", { text: "Sugerir uma receita" }));
+    form.appendChild(el("p", { class: "dica-fonte", text: "Sua sugestão será revisada antes de aparecer no site." }));
+    function campo(label, key, ph, area, foco) {
+      form.appendChild(el("label", { class: "field-label", text: label }));
+      var i = area ? el("textarea", { class: "obs-input", placeholder: ph, "aria-label": label }) : el("input", { type: "text", value: f[key], placeholder: ph, "aria-label": label, "data-focus": foco || null });
+      if (area) i.value = f[key];
+      i.addEventListener("input", function (e) { f[key] = e.target.value; });
+      form.appendChild(i);
+    }
+    campo("Nome da receita", "nome", "Ex: Bolo de banana", false, "sug-nome");
+    form.appendChild(el("label", { class: "field-label", text: "Categoria" }));
+    form.appendChild(makeSelect([{ key: "", label: "Sem categoria" }].concat(asOptions(RECEITA_CATEGORIAS)), f.categoria, "Categoria", function (v) { f.categoria = v; }));
+    campo("Ingredientes (um por linha)", "ingredientes", "2 bananas maduras\n1 xícara de aveia", true);
+    campo("Modo de preparo", "modoPreparo", "Descreva o passo a passo", true);
+    campo("Link de vídeo (opcional)", "link", "https://...");
+    campo("Seu nome (opcional)", "autor", "Como quer aparecer");
+    var pote = el("input", { type: "text", tabindex: "-1", autocomplete: "off", "aria-hidden": "true", class: "pote-mel" });
+    pote.addEventListener("input", function (e) { f.site = e.target.value; });
+    form.appendChild(pote);
+    if (sugestaoMsg) form.appendChild(el("p", { class: "backup-msg " + sugestaoMsg.tipo, text: sugestaoMsg.texto }));
+    var acts = el("div", { class: "form-actions" });
+    var env = el("button", { class: "btn-primary", type: "button", text: "Enviar sugestão" });
+    env.addEventListener("click", function () { enviarSugestao(env); });
+    var canc = el("button", { class: "btn-text", type: "button", text: "Cancelar" });
+    canc.addEventListener("click", function () { sugestaoForm = null; sugestaoMsg = null; renderContent(); });
+    acts.appendChild(env);
+    acts.appendChild(canc);
+    form.appendChild(acts);
+    box.appendChild(form);
+    container.appendChild(box);
+  }
+  function carregarSugestoes() {
+    if (!ONLINE || online.status !== "pronto" || !podeEditar("receitas")) return Promise.resolve();
+    return sb.from("sugestoes").select("id,dados,autor,criado_em").order("criado_em").then(function (r) {
+      if (r.error) return;
+      online.sugestoes = r.data || [];
+    });
+  }
+  function resolverSugestao(s, aprovar) {
+    var p = aprovar ? limparReceita(s.dados) : null;
+    sb.from("sugestoes").delete().eq("id", s.id).then(function (r) {
+      if (r.error) { online.msgSugestoes = "Não foi possível concluir. Tente de novo."; renderContent(); return; }
+      online.sugestoes = online.sugestoes.filter(function (x) { return x.id !== s.id; });
+      online.msgSugestoes = null;
+      if (p) {
+        if (p.link && !/^https?:\/\//i.test(p.link)) p.link = "";
+        p.id = uid();
+        p.fonte = s.autor ? "Sugestão de " + s.autor : "Sugestão de visitante";
+        p.publica = true;
+        state.receitas.push(p);
+        schedulePersist();
+      }
+      renderContent();
+    });
+  }
+  function renderSugestoesRecebidas(container) {
+    var lista = online.sugestoes || [];
+    if (!lista.length) return;
+    var painel = el("div", { class: "treino-painel" });
+    painel.appendChild(el("h3", { text: "Sugestões recebidas (" + lista.length + ")" }));
+    painel.appendChild(el("div", { class: "dica-fonte", text: "Enviadas por visitantes do site. Aprovadas entram nas receitas como públicas." }));
+    lista.forEach(function (s) {
+      var d = s.dados || {};
+      var card = el("div", { class: "ex-item" });
+      card.appendChild(el("div", { class: "ex-nome", text: txt(d.nome, 200) || "(sem nome)" }));
+      card.appendChild(el("div", { class: "dica-fonte", text: (s.autor ? "Por " + s.autor + " · " : "") + fmtData(s.criado_em) + (d.categoria ? " · " + d.categoria : "") }));
+      var ing = Array.isArray(d.ingredientes) ? d.ingredientes : [];
+      if (ing.length) card.appendChild(el("p", { class: "ex-como", text: ing.map(function (i) { return "• " + i; }).join("\n") }));
+      if (d.modoPreparo) card.appendChild(el("p", { class: "ex-como", text: txt(d.modoPreparo) }));
+      if (d.link && /^https?:\/\//i.test(d.link)) card.appendChild(el("div", { class: "dica-fonte" }, [el("a", { href: d.link, target: "_blank", rel: "noopener noreferrer", text: "▶ Ver vídeo" })]));
+      var acts = el("div", { class: "card-actions" });
+      var ok = el("button", { class: "btn-primary", type: "button", text: "Aprovar" });
+      ok.addEventListener("click", function () { ok.disabled = true; resolverSugestao(s, true); });
+      var nao = el("button", { class: "btn-text danger", type: "button", text: "Recusar" });
+      nao.addEventListener("click", function () { nao.disabled = true; resolverSugestao(s, false); });
+      acts.appendChild(ok);
+      acts.appendChild(nao);
+      card.appendChild(acts);
+      painel.appendChild(card);
+    });
+    if (online.msgSugestoes) painel.appendChild(el("p", { class: "backup-msg erro", text: online.msgSugestoes }));
+    container.appendChild(painel);
   }
   // ----- render: receitas -----
   function renderReceitaForm() {
@@ -2692,7 +2849,7 @@
     var titleEl = el("h3", { text: r.nome, title: "Ver receita completa" });
     titleEl.addEventListener("click", function () { receitaViewId = r.id; renderContent(); });
     card.appendChild(titleEl);
-    card.appendChild(el("div", { class: "receita-meta", text: r.ingredientes.length + (r.ingredientes.length === 1 ? " ingrediente" : " ingredientes") + (r.link ? " · tem vídeo" : "") + (r.fonte ? " · " + r.fonte : "") }));
+    card.appendChild(el("div", { class: "receita-meta" }, [r.ingredientes.length + (r.ingredientes.length === 1 ? " ingrediente" : " ingredientes") + (r.link ? " · tem vídeo" : "") + (r.fonte ? " · " + r.fonte : "") + " ", seloVisibilidade(r)]));
     if (r.modoPreparo) {
       var preview = r.modoPreparo.length > 140 ? r.modoPreparo.slice(0, 140) + "…" : r.modoPreparo;
       card.appendChild(el("p", { class: "receita-preview", text: preview }));
@@ -2727,6 +2884,8 @@
     actions.appendChild(viewBtn);
     actions.appendChild(editBtn);
     actions.appendChild(sendBtn);
+    var vis = botaoVisibilidade(r, "receitas");
+    if (vis) actions.appendChild(vis);
     actions.appendChild(delBtn);
     card.appendChild(actions);
     return card;
@@ -2737,7 +2896,7 @@
     backBtn.addEventListener("click", function () { receitaViewId = null; renderContent(); });
     wrap.appendChild(backBtn);
     wrap.appendChild(el("h3", { class: "receita-view-title", text: r.nome }));
-    wrap.appendChild(el("div", { class: "receita-meta", text: r.ingredientes.length + (r.ingredientes.length === 1 ? " ingrediente" : " ingredientes") }));
+    wrap.appendChild(el("div", { class: "receita-meta" }, [r.ingredientes.length + (r.ingredientes.length === 1 ? " ingrediente" : " ingredientes") + " ", seloVisibilidade(r)]));
     wrap.appendChild(el("div", { class: "field-label", text: "Ingredientes" }));
     var ingList = el("ul", { class: "receita-view-ingredientes" });
     r.ingredientes.forEach(function (ing) { ingList.appendChild(el("li", { text: ing })); });
@@ -2783,6 +2942,8 @@
     });
     actions.appendChild(editBtn);
     actions.appendChild(sendBtn);
+    var vis = botaoVisibilidade(r, "receitas");
+    if (vis) actions.appendChild(vis);
     actions.appendChild(delBtn);
     wrap.appendChild(actions);
     container.appendChild(wrap);
@@ -2795,7 +2956,7 @@
       return;
     }
     var header = el("div", { class: "receitas-header" });
-    header.appendChild(el("p", { class: "section-hint", text: "Guarde suas receitas com ingredientes e modo de preparo." }));
+    header.appendChild(el("p", { class: "section-hint", text: modoVisitante() ? "Receitas compartilhadas. Tem uma receita boa? Envie sua sugestão." : "Guarde suas receitas com ingredientes e modo de preparo." }));
     if (!receitaForm) {
       var acoes = el("div", { class: "header-actions" });
       var impBtn = el("button", { class: "btn-text", type: "button", text: "Importar receitas" });
@@ -2811,10 +2972,12 @@
       header.appendChild(acoes);
     }
     container.appendChild(header);
+    if (modoVisitante()) renderSugestaoForm(container);
+    if (ONLINE && online.status === "pronto" && podeEditar("receitas")) renderSugestoesRecebidas(container);
     renderImportacao(container);
     if (receitaForm) container.appendChild(renderReceitaForm());
     if (state.receitas.length === 0 && !receitaForm) {
-      container.appendChild(el("p", { class: "empty-state", text: "Nenhuma receita ainda. Adicione a primeira!" }));
+      container.appendChild(el("p", { class: "empty-state", text: modoVisitante() ? "Nenhuma receita pública ainda." : "Nenhuma receita ainda. Adicione a primeira!" }));
       return;
     }
     if (state.receitas.length === 0) return;
@@ -2862,7 +3025,7 @@
     var content = document.getElementById("content");
     content.innerHTML = "";
     renderSetup(content);
-    if (ONLINE && online.status !== "pronto") return;
+    if (ONLINE && online.status !== "pronto" && online.status !== "publico") return;
     if (ONLINE && !abaVisivel(activeTab)) return;
     renderAba(content);
     if (ONLINE && SECOES[activeTab] && !podeEditar(activeTab)) aplicarSomenteLeitura(content);
@@ -2901,12 +3064,14 @@
     tarefas: ["tarefas"], reparos: ["reparos"], exercicios: ["fichas", "treinoPerfil"], saude: ["medidas"]
   };
   var sb = null;
-  var online = { status: "carregando", email: "", dono: false, acessos: {}, salvo: {}, msg: null, erroSalvar: false };
+  var online = { status: "carregando", email: "", dono: false, acessos: {}, salvo: {}, salvoPublico: {}, sugestoes: [], msg: null, erroSalvar: false };
+  var SECOES_PUBLICAS = ["receitas", "dicas"];
   var onlineChain = Promise.resolve();
   function podeVer(secao) { return online.dono || Object.prototype.hasOwnProperty.call(online.acessos, secao); }
   function podeEditar(secao) { return !ONLINE || online.dono || online.acessos[secao] === true; }
   function abaVisivel(key) {
     if (!ONLINE) return true;
+    if (online.status === "publico") return SECOES_PUBLICAS.indexOf(key) >= 0;
     if (key === "financeiro") return false;
     if (key === "backup") return online.dono;
     return SECOES[key] ? podeVer(key) : false;
@@ -2934,23 +3099,64 @@
     Object.keys(SECOES).forEach(function (s) { online.salvo[s] = secaoJSON(s); });
   }
   function salvarOnline() {
+    if (online.status === "publico") { setSaveStatus("visitante"); return; }
     if (online.status !== "pronto") return;
-    var mudou = Object.keys(SECOES).filter(function (s) { return podeEditar(s) && secaoJSON(s) !== online.salvo[s]; });
-    if (!mudou.length) { setSaveStatus("online"); return; }
-    onlineChain = onlineChain.then(function () {
-      return Promise.all(mudou.map(function (s) {
-        var j = secaoJSON(s);
+    var tarefas = [];
+    Object.keys(SECOES).forEach(function (s) {
+      if (!podeEditar(s)) return;
+      var j = secaoJSON(s);
+      if (j === online.salvo[s]) return;
+      tarefas.push(function () {
         return sb.from("secoes").upsert({ secao: s, dados: JSON.parse(j) }).then(function (r) {
           if (r.error) throw r.error;
           online.salvo[s] = j;
         });
-      }));
+      });
+    });
+    // Mantém a cópia pública (só itens marcados como públicos) em dia.
+    SECOES_PUBLICAS.forEach(function (s) {
+      if (!online.publicoOk || !podeEditar(s)) return;
+      var pj = JSON.stringify(dadosPublicos(s));
+      if (pj === online.salvoPublico[s]) return;
+      tarefas.push(function () {
+        return sb.from("publico").upsert({ secao: s, dados: JSON.parse(pj) }).then(function (r) {
+          if (r.error) throw r.error;
+          online.salvoPublico[s] = pj;
+        });
+      });
+    });
+    if (!tarefas.length) { setSaveStatus(algumaEdicao() ? "online" : "leitura"); return; }
+    onlineChain = onlineChain.then(function () {
+      return Promise.all(tarefas.map(function (t) { return t(); }));
     }).then(function () {
       online.erroSalvar = false;
-      setSaveStatus("online");
+      setSaveStatus(algumaEdicao() ? "online" : "leitura");
     }).catch(function () {
       online.erroSalvar = true;
       setSaveStatus("error");
+    });
+  }
+  function algumaEdicao() {
+    return online.dono || Object.keys(online.acessos).some(function (k) { return online.acessos[k]; });
+  }
+  // Visitante (sem login): lê só a cópia pública de receitas e dicas.
+  function carregarPublico() {
+    online.status = "carregando";
+    renderAll();
+    sb.from("publico").select("secao,dados").then(function (r) {
+      var base = lerUI();
+      state = normalizeState(base);
+      if (!r.error && r.data) {
+        r.data.forEach(function (row) {
+          if (SECOES_PUBLICAS.indexOf(row.secao) >= 0 && Array.isArray(row.dados)) state[row.secao] = row.dados;
+        });
+      }
+      state = normalizeState(state);
+      online.status = "publico";
+      if (!abaVisivel(state.activeTab)) state.activeTab = "receitas";
+      activeTab = state.activeTab;
+      setSaveStatus("visitante");
+      renderAll();
     });
   }
   function editandoAgora() {
@@ -2968,7 +3174,20 @@
     return online.salvo[s] !== antes;
   }
   function recarregarOnline() {
+    if (online.status === "publico") {
+      if (editandoAgora() || sugestaoForm) return;
+      sb.from("publico").select("secao,dados").then(function (r) {
+        if (r.error || !r.data) return;
+        r.data.forEach(function (row) {
+          if (SECOES_PUBLICAS.indexOf(row.secao) >= 0 && Array.isArray(row.dados)) state[row.secao] = row.dados;
+        });
+        state = normalizeState(state);
+        renderAll();
+      });
+      return;
+    }
     if (online.status !== "pronto") return;
+    carregarSugestoes().then(function () { if (!editandoAgora() && activeTab === "receitas") renderContent(); });
     sb.from("secoes").select("secao,dados").then(function (r) {
       if (r.error || !r.data) return;
       var mudou = false;
@@ -2997,21 +3216,30 @@
       rs[2].data.forEach(function (row) { if (SECOES[row.secao]) aplicarSecao(row.secao, row.dados); });
       state = normalizeState(state);
       marcarSalvo();
+      online.status = "pronto";
       if (!abaVisivel(state.activeTab)) {
         state.activeTab = TABS.filter(function (t) { return abaVisivel(t.key); })[0].key;
       }
       activeTab = state.activeTab;
-      online.status = "pronto";
-      setSaveStatus(online.dono || Object.keys(online.acessos).some(function (k) { return online.acessos[k]; }) ? "online" : "leitura");
+      setSaveStatus(algumaEdicao() ? "online" : "leitura");
       renderAll();
+      // Cópia pública e sugestões: não impedem o uso se algo falhar.
+      sb.from("publico").select("secao,dados").then(function (r) {
+        if (r.error) return;
+        (r.data || []).forEach(function (row) { online.salvoPublico[row.secao] = JSON.stringify(row.dados); });
+        online.publicoOk = true;
+        salvarOnline();
+      });
+      carregarSugestoes().then(function () { if (activeTab === "receitas" && !editandoAgora()) renderContent(); });
       sb.channel("secoes-mudancas")
         .on("postgres_changes", { event: "*", schema: "public", table: "secoes" }, function (p) {
           if (p.new && p.new.secao && receberSecao(p.new.secao, p.new.dados) && !editandoAgora()) renderAll();
         })
         .subscribe();
-    }).catch(function () {
+    }).catch(function (err) {
       online.status = "erro";
-      online.msg = "Não foi possível carregar os dados. Verifique a internet e recarregue a página.";
+      online.msg = "Não foi possível carregar os dados. Verifique a internet e recarregue a página. (Detalhe técnico: " +
+        ((err && (err.message || err.code)) || String(err)) + ")";
       renderAll();
     });
   }
@@ -3029,6 +3257,7 @@
             : /rate|seconds|many/i.test(r.error.message || "")
               ? "Muitos pedidos seguidos. Espere alguns minutos e tente de novo."
               : "Não foi possível enviar o link. Tente de novo em instantes.";
+          online.msg += " (Detalhe técnico: " + (r.error.message || r.error.status || "sem detalhe") + ")";
         } else {
           online.status = "link-enviado";
           online.email = email;
@@ -3044,6 +3273,15 @@
     });
   }
   function renderOnlineSetup(container) {
+    if (online.status === "publico") {
+      var bv = el("div", { class: "online-barra" });
+      bv.appendChild(el("span", { text: "Você está vendo as receitas e dicas públicas." }));
+      var entrar = el("button", { class: "btn-text", type: "button", text: "Entrar (equipe)" });
+      entrar.addEventListener("click", function () { online.status = "login"; online.msg = null; renderAll(); });
+      bv.appendChild(entrar);
+      container.appendChild(bv);
+      return;
+    }
     if (online.status === "pronto") {
       var barra = el("div", { class: "online-barra" });
       var papel = online.dono ? "" : (podeEditar(activeTab) ? "" : " · nesta aba você pode ver, mas não editar");
@@ -3069,6 +3307,9 @@
       row.appendChild(inp);
       row.appendChild(b);
       p.appendChild(row);
+      var voltar = el("button", { class: "btn-text", type: "button", text: "← Ver receitas públicas" });
+      voltar.addEventListener("click", function () { online.msg = null; carregarPublico(); });
+      p.appendChild(voltar);
     } else if (online.status === "link-enviado") {
       p.appendChild(el("h3", { text: "Confira seu e-mail" }));
       p.appendChild(el("p", { text: "Enviamos um link de acesso para " + online.email + ". Abra o e-mail neste aparelho e toque no link (veja também a caixa de spam)." }));
@@ -3083,19 +3324,22 @@
       p.appendChild(s2);
     } else {
       p.appendChild(el("h3", { text: "Algo deu errado" }));
+      var s3 = el("button", { class: "btn-text", type: "button", text: "Sair e entrar de novo" });
+      s3.addEventListener("click", sair);
+      p.appendChild(s3);
     }
     if (online.msg) p.appendChild(el("p", { class: "backup-msg erro", text: online.msg }));
     container.appendChild(p);
   }
   // Em abas só de leitura, tira os botões de alterar e trava os campos.
-  var BOTAO_EDITA = /^(\+|×|✓|Editar|Excluir|Confirmar|Importar|Salvar|Adicionar|Remover|Desmarcar|Desfazer|Enviar|Cancelar|Limpar|Marcar)/;
+  var BOTAO_EDITA = /^(\+|×|✓|Editar|Excluir|Confirmar|Importar|Salvar|Adicionar|Remover|Desmarcar|Desfazer|Enviar|Cancelar|Limpar|Marcar|Tornar|Aprovar|Recusar)/;
   function aplicarSomenteLeitura(content) {
     content.querySelectorAll("button").forEach(function (b) {
-      if (b.closest(".online-barra")) return;
+      if (b.closest(".online-barra") || b.closest(".livre")) return;
       if (BOTAO_EDITA.test(b.textContent.trim()) || b.classList.contains("danger") || b.classList.contains("btn-add-compra")) b.remove();
     });
     content.querySelectorAll("input, textarea, select").forEach(function (i) {
-      if (i.classList.contains("dicas-busca")) return;
+      if (i.classList.contains("dicas-busca") || i.closest(".livre")) return;
       i.disabled = true;
     });
   }
@@ -3121,7 +3365,7 @@
         }
       });
       sb.auth.getSession().then(function (r) {
-        if (!r.data.session && !iniciado) { online.status = "login"; renderAll(); }
+        if (!r.data.session && !iniciado) carregarPublico();
       });
       document.addEventListener("visibilitychange", function () { if (!document.hidden) recarregarOnline(); });
     };
